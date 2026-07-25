@@ -28,8 +28,8 @@ export default function Header() {
         <Link href="/" className="flex items-center group shrink-0 py-1.5">
           <div className="relative h-8 md:h-10 w-auto flex items-center overflow-hidden">
             <img 
-              src="/images/lazisku.png" 
-              alt="Logo lazisku.com" 
+              src="/images/asyiq.png" 
+              alt="Logo asyiq.ponpes.id" 
               className="h-full w-auto object-contain transition-transform duration-300 group-hover:scale-[1.02]"
             />
           </div>

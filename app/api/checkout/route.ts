@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const rawAmount = body.amount || body.nominal || 0;
     const cleanAmountNumber = Number(String(rawAmount).replace(/\D/g, ''));
 
-    // Validasi dasar transaksi diturunkan menjadi Rp 1.000 agar sinkron dengan Pakasir QRIS
+    // Validasi dasar transaksi minimal Rp 1.000 agar sinkron dengan Pakasir QRIS
     if (!slug || !cleanAmountNumber || cleanAmountNumber < 1000) {
       return NextResponse.json(
         { success: false, error: 'Data tidak valid. Minimal donasi adalah Rp 1.000' },
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
     const prefix = cleanSlug.includes('ASRAMA') ? 'ASRAMA' : cleanSlug.includes('SANTRI') ? 'SANTRI' : 'ASYIQ';
     const generatedOrderId = `INV-${prefix}-${Date.now()}`;
 
-    // Mengubah default project slug gateway ke identitas Pondok Pesantren Asyiq
-    const pakasirProjectSlug = process.env.PAKASIR_PROJECT || process.env.PAKASIR_SLUG || 'pesantren-asyiq';
+    // 🚀 DISESUAIKAN: Menggunakan slug proyek Pakasir Pondok Pesantren 'Aasyiqul Qur'an
+    const pakasirProjectSlug = process.env.PAKASIR_PROJECT || process.env.PAKASIR_SLUG || 'pondok-pesantren-aasyiqul-quran';
     const pakasirApiKey = process.env.PAKASIR_API_KEY || '';
 
     // Validasi internal sebelum fetch dilakukan agar parameter tidak kosong ke API Pakasir
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     // Properti ini berisi raw QR string jika memilih qris, atau nomor VA jika memilih bank transfer
     const paymentNumber = pakasirData.payment.payment_number || '';
     
-    // Penyusunan Link web-checkout alternatif
+    // 🚀 DISESUAIKAN: Menggunakan domain utama https://www.asyiq.ponpes.id
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
     const isQrisOnly = cleanMethod === 'qris' ? '&qris_only=1' : '';
     
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 
     console.log(`🔒 TRANSAKSI BERHASIL DICATAT DI SANITY: ${generatedOrderId} | Fundraiser: ${fundraiserPhone || 'Non-Afiliasi'}`);
 
-    // 🚀 2. SYNC KE GOOGLE SHEET (Ditempatkan sebelum response agar serverless Vercel tidak memutus koneksi)
+    // 🚀 2. SYNC KE GOOGLE SHEET
     const googleSheetScriptUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL || '';
 
     if (googleSheetScriptUrl && googleSheetScriptUrl.trim()) {

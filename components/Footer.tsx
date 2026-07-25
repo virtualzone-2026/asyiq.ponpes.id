@@ -19,7 +19,7 @@ export default function Footer() {
             <div className="flex items-center">
               <div className="relative h-11 w-auto flex items-center overflow-hidden">
                 <img 
-                  src="/images/logo.png" 
+                  src="/images/asyiq.png" 
                   alt="Logo Pondok Pesantren 'Aasyiqul Qur'an" 
                   className="h-full w-auto object-contain"
                 />
