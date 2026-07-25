@@ -43,17 +43,9 @@ export async function POST(request: Request) {
     const prefix = cleanSlug.includes('ASRAMA') ? 'ASRAMA' : cleanSlug.includes('SANTRI') ? 'SANTRI' : 'ASYIQ';
     const generatedOrderId = `INV-${prefix}-${Date.now()}`;
 
-    // 🚀 DISESUAIKAN: Menggunakan slug proyek Pakasir Pondok Pesantren 'Aasyiqul Qur'an
-    const pakasirProjectSlug = process.env.PAKASIR_PROJECT || process.env.PAKASIR_SLUG || 'pondok-pesantren-aasyiqul-quran';
+    // 🚀 DISesuaIKAN: Menggunakan slug proyek Pakasir Pondok Pesantren 'Aasyiqul Qur'an secara presisi
+    const pakasirProjectSlug = 'pondok-pesantren-aasyiqul-quran';
     const pakasirApiKey = process.env.PAKASIR_API_KEY || '';
-
-    // Validasi internal sebelum fetch dilakukan agar parameter tidak kosong ke API Pakasir
-    if (!pakasirProjectSlug || !pakasirProjectSlug.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Internal Server Error: Identitas nama project gateway kosong.' },
-        { status: 500 }
-      );
-    }
 
     if (!pakasirApiKey || !pakasirApiKey.trim()) {
       console.error('⚠️ Kredensial PAKASIR_API_KEY belum dikonfigurasi di file environment variables server!');
@@ -68,7 +60,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        project: pakasirProjectSlug.trim(),
+        project: pakasirProjectSlug,
         order_id: generatedOrderId,
         amount: cleanAmountNumber,
         api_key: pakasirApiKey,
@@ -85,7 +77,7 @@ export async function POST(request: Request) {
     // Properti ini berisi raw QR string jika memilih qris, atau nomor VA jika memilih bank transfer
     const paymentNumber = pakasirData.payment.payment_number || '';
     
-    // 🚀 DISESUAIKAN: Menggunakan domain utama https://www.asyiq.ponpes.id
+    // 🚀 DISESUAIKAN: Menggunakan domain resmi utama https://www.asyiq.ponpes.id
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
     const isQrisOnly = cleanMethod === 'qris' ? '&qris_only=1' : '';
     
@@ -94,7 +86,14 @@ export async function POST(request: Request) {
     // Gunakan payment_url bawaan dari objek gateway jika tersedia, atau arahkan ke fallback link web checkout
     const paymentUrl = pakasirData.payment.payment_url || fallbackUrlWeb;
 
-    // 🚀 1. MENULIS DATA TRANSAKSI LENGKAP KE SANITY (Waktu disesuaikan WIB)
+    // 🚀 GENERATE WAKTU LOKAL WIB (Asia/Jakarta) YANG AKURAT
+    const currentWibTimestamp = new Date().toLocaleString('id-ID', { 
+      timeZone: 'Asia/Jakarta',
+      dateStyle: 'medium',
+      timeStyle: 'medium'
+    });
+
+    // 🚀 1. MENULIS DATA TRANSAKSI LENGKAP KE SANITY (Beserta atribut waktu lokal WIB)
     await client.create({
       _type: 'donationTransaction',
       orderId: String(generatedOrderId),
@@ -108,22 +107,16 @@ export async function POST(request: Request) {
       paymentUrl: String(paymentUrl), 
       paymentNumber: String(paymentNumber), 
       fundraiserPhone: fundraiserPhone ? String(fundraiserPhone).trim() : '',
+      createdAtWib: currentWibTimestamp, // Memastikan field tanggal terekam rapi berbasis WIB
     });
 
-    console.log(`🔒 TRANSAKSI BERHASIL DICATAT DI SANITY: ${generatedOrderId} | Fundraiser: ${fundraiserPhone || 'Non-Afiliasi'}`);
+    console.log(`🔒 TRANSAKSI BERHASIL DICATAT DI SANITY: ${generatedOrderId} | Waktu: ${currentWibTimestamp}`);
 
-    // 🚀 2. SYNC KE GOOGLE SHEET (Menggunakan format tanggal waktu WIB yang akurat)
+    // 🚀 2. SYNC KE GOOGLE SHEET
     const googleSheetScriptUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL || '';
 
     if (googleSheetScriptUrl && googleSheetScriptUrl.trim()) {
       try {
-        // Memastikan tanggal dan jam akurat menggunakan zona waktu Asia/Jakarta (WIB)
-        const currentWibTimestamp = new Date().toLocaleString('id-ID', { 
-          timeZone: 'Asia/Jakarta',
-          dateStyle: 'medium',
-          timeStyle: 'medium'
-        });
-
         await fetch(googleSheetScriptUrl.trim(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
