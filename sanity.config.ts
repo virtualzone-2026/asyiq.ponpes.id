@@ -49,8 +49,8 @@ export default defineConfig([
                 }
               },
               React.createElement('img', {
-                src: '/images/lazisku.png',
-                alt: 'Logo lazisku',
+                src: '/images/asyiq.png',
+                alt: 'Logo asyiq.ponpes.id',
                 style: {
                   height: '52px', 
                   width: 'auto',
