@@ -1,6 +1,6 @@
 {
-  "name": "LAZIS Khoiro Ummah",
-  "short_name": "LAZISku",
+  "name": "Pondok Pesantren 'Aasyiqul Qur'an",
+  "short_name": "Asyiq",
   "description": "Platform Sedekah, Infaq & Zakat Online Amanah",
   "start_url": "/",
   "display": "standalone",
@@ -26,14 +26,14 @@
       "sizes": "1729x910",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Tampilan Desktop LAZISku"
+      "label": "Tampilan Desktop Asyiq"
     },
     {
       "src": "/images/banner.png",
       "sizes": "1729x910",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Tampilan Mobile LAZISku"
+      "label": "Tampilan Mobile Asyiq"
     }
   ]
 }
