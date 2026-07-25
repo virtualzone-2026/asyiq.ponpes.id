@@ -15,18 +15,18 @@ export default function Footer() {
           
           {/* Kolom 1: Branding & Tentang */}
           <div className="space-y-4">
-            {/* 🚀 FIXED AREA LOGO: Murni merender file image logo-sedekah.png asli tanpa teks duplikat */}
+            {/* 🚀 FIXED AREA LOGO: Murni merender file image logo asli tanpa teks duplikat */}
             <div className="flex items-center">
               <div className="relative h-11 w-auto flex items-center overflow-hidden">
                 <img 
-                  src="/images/lazisku.png" 
-                  alt="Logo lazisku.com" 
+                  src="/images/logo.png" 
+                  alt="Logo Pondok Pesantren 'Aasyiqul Qur'an" 
                   className="h-full w-auto object-contain"
                 />
               </div>
             </div>
             <p className="text-xs text-gray-400 leading-relaxed font-medium">
-              Platform crowdfunding resmi Yayasan Khoiro Ummah Bina Umat. Menjembatani kebaikan Anda melalui penyaluran infak dan donasi yang aman, transparan, dan amanah menggunakan QRIS Instan.
+              Platform resmi Pondok Pesantren 'Aasyiqul Qur'an. Menjembatani kebaikan Anda melalui penyaluran infak, donasi pendidikan, dan wakaf yang aman, transparan, dan amanah.
             </p>
           </div>
 
@@ -38,7 +38,7 @@ export default function Footer() {
                 <Link href="/" className="hover:text-emerald-600 transition-colors">Beranda</Link>
               </li>
               <li>
-                <Link href="/program" className="hover:text-emerald-600 transition-colors">Program Donasi</Link>
+                <Link href="/program" className="hover:text-emerald-600 transition-colors">Program Pesantren</Link>
               </li>
               <li>
                 <Link href="/tentang-kami" className="hover:text-emerald-600 transition-colors">Tentang Kami</Link>
@@ -46,7 +46,7 @@ export default function Footer() {
               <li>
                 <Link href="/kontak" className="hover:text-emerald-600 transition-colors">Hubungi Kami</Link>
               </li>
-			  <li>
+              <li>
                 <Link href="https://onislam.web.id" className="hover:text-emerald-600 transition-colors">Media Islam</Link>
               </li>
             </ul>
@@ -60,10 +60,10 @@ export default function Footer() {
                 <Link href="/kalkulator" className="hover:text-emerald-600 transition-colors">Kalkulator Zakat</Link>
               </li>
               <li>
-                <Link href="/blog" className="hover:text-emerald-600 transition-colors">Berita dan Artikel</Link>
+                <Link href="/blog" className="hover:text-emerald-600 transition-colors">Berita & Artikel</Link>
               </li>
               <li>
-                <Link href="https://www.lazisku.com/fundraiser/stats" className="hover:text-emerald-600 transition-colors">Fundraiser</Link>
+                <Link href="https://www.asyiq.ponpes.id/fundraiser/stats" className="hover:text-emerald-600 transition-colors">Fundraiser</Link>
               </li>
               <li>
                 <Link href="/peta-situs" className="hover:text-emerald-600 transition-colors">Peta Situs</Link>
@@ -76,8 +76,8 @@ export default function Footer() {
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-4">Hubungi Kami</h3>
             <ul className="space-y-2 text-xs font-medium text-gray-400 leading-relaxed">
               <li>
-                <span className="font-bold text-gray-700 block">Alamat Kantor:</span>
-                Bentar, Salem, Brebes, Jawa Tengah
+                <span className="font-bold text-gray-700 block">Alamat Pesantren:</span>
+                Pondok Pesantren 'Aasyiqul Qur'an
               </li>
               <li>
                 <span className="font-bold text-gray-700 block">WhatsApp:</span>
@@ -95,7 +95,7 @@ export default function Footer() {
           
           {/* Hak Cipta */}
           <div>
-            &copy; {currentYear} <span className="font-bold text-gray-600 uppercase">lazisku.com</span>. Hak Cipta Dilindungi.
+            &copy; {currentYear} <span className="font-bold text-gray-600 uppercase">asyiq.ponpes.id</span>. Hak Cipta Dilindungi.
           </div>
 
           {/* Tautan Legalitas */}

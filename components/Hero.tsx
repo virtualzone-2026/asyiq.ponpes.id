@@ -34,21 +34,21 @@ export default function Hero() {
         <div className="inline-flex items-center gap-2 mb-8 bg-emerald-950/50 border border-emerald-500/30 px-4 py-2 rounded shadow-[0_0_20px_rgba(16,185,129,0.05)]">
           <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
           <span className="text-[10px] md:text-xs font-black tracking-widest text-emerald-400 uppercase">
-            Yayasan Khoiro Ummah Bina Umat
+            Pondok Pesantren 'Aasyiqul Qur'an
           </span>
         </div>
 
         {/* Headline Utama: Kokoh, Padat & Berkarakter */}
         <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase leading-[1.05] mb-8 max-w-4xl">
-          FROM BATTLING CRISIS TO <br />
+          MEMBINA GENERASI QUR'ANI <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 drop-shadow-[0_0_25px_rgba(52,211,153,0.35)] normal-case font-medium italic inline-block mt-2 font-serif tracking-normal">
-            Spreading Hope
+            Menuju Keberkahan Abadi
           </span>
         </h1>
 
         {/* Deskripsi Pendek Pendukung */}
         <p className="text-gray-100 text-sm md:text-lg mb-12 max-w-3xl leading-relaxed tracking-wide font-normal drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-          Salurkan bantuan terbaik Anda secara transparan, amanah, dan instan menggunakan QRIS. Setiap rupiah yang Anda donasikan adalah jembatan masa depan bagi sesama.
+          Salurkan infak, donasi pendidikan, dan wakaf terbaik Anda secara transparan, amanah, dan instan untuk kemajuan Pondok Pesantren 'Aasyiqul Qur'an. Setiap rupiah adalah investasi amal jariyah bagi para penghafal Al-Qur'an.
         </p>
 
         {/* Tombol CTA Premium Action Button */}
@@ -60,7 +60,7 @@ export default function Hero() {
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
           
           <span className="relative z-10 flex items-center gap-2">
-            ★ Donasi Sekarang
+            ★ Donasi & Infaq Sekarang
           </span>
           <svg 
             className="w-4 h-4 transition-transform duration-300 ease-out group-hover:translate-x-1 relative z-10" 

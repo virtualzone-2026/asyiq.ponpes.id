@@ -71,8 +71,8 @@ export default function LiveDonationNotification({ donations }: LiveDonationNoti
         {/* Konten Teks Data Asli */}
         <div className="flex flex-col text-left">
           <p className="text-[11px] md:text-sm text-gray-900 leading-normal md:leading-relaxed font-medium">
-            Alhamdulillah, <span className="text-gray-950 font-bold">{currentDonation.name}</span> baru saja bersedekah{' '}
-            <span className="text-emerald-600 font-black">{currentDonation.amount}</span> untuk <span className="text-cyan-600 font-semibold">{currentDonation.program}</span>
+            Alhamdulillah, <span className="text-gray-950 font-bold">{currentDonation.name}</span> baru saja berinfaq/donasi{' '}
+            <span className="text-emerald-600 font-black">{currentDonation.amount}</span> untuk <span className="text-cyan-600 font-semibold">{currentDonation.program}</span> di Pondok Pesantren 'Aasyiqul Qur'an
           </p>
           
           <span className="text-[9px] md:text-[10px] text-gray-400 tracking-wide mt-0.5 block italic">
