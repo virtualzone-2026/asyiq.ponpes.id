@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic';
 
 // 🚀 BYPASS CLIENT: Murni untuk update data esensial program website
 const client = createClient({
-  projectId: '61d8vnuq',
+  projectId: 'lsnco71s',
   dataset: 'production',
   useCdn: false,
   apiVersion: '2024-01-01',
-  token: 'sk44JM4AlD6urcLa9Ak9vvnRpLGlsRai9aftW1wPA4w9zxwhrCpKREk2ArKU25K4kENIPxVXenu4kZhm2cOSaxGP69kz8az2qM2BZDIVzqyAGLjIvVTGKMu39CExUrKwbw2wCb2bfxKPgZ4lqEt2nwLZT4HEc4XT1qfrZ0i6KYupIlT6IOlP',
+  token: 'skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh',
 });
 
 // ===================================================================
@@ -182,7 +182,7 @@ Jazakumullah khairan, Kak *${donorNameFromForm}*. Donasi Anda telah berhasil kam
 Semoga sedekah yang ditunaikan menjadi penggugur dosa, pembuka pintu rezeki, dan membawa keberkahan yang berlipat ganda untuk Anda beserta keluarga. Aamiin Yaa Rabbal 'Aalamiin.
 
 ----------------------------
-*LAZIS Khoiro Ummah*
+*Asyiqul Quran*
 _Salurkan kepedulian Anda secara amanah & transparan_`;
 
       try {

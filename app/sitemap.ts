@@ -1,8 +1,8 @@
 // app/sitemap.ts
 import { MetadataRoute } from 'next';
 
-// Sesuaikan URL domain utama LAZIS Khoiro Ummah
-const BASE_URL = 'https://lazisku.com';
+// Sesuaikan URL domain utama Pondok Pesantren Asyiq
+const BASE_URL = 'https://www.asyiq.ponpes.id';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   
@@ -26,15 +26,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let blogRoutes: MetadataRoute.Sitemap = [];
 
   try {
-    // 2. Fetch Rute Dinamis untuk Seluruh Program Donasi
+    // 2. Fetch Rute Dinamis untuk Seluruh Program Pesantren / Galang Dana
     const resPrograms = await fetch(`${BASE_URL}/api/programs`, { cache: 'no-store' });
     const jsonPrograms = await resPrograms.json();
     
     if (jsonPrograms.success && Array.isArray(jsonPrograms.data)) {
       campaignRoutes = jsonPrograms.data.map((program: any) => ({
-        url: `${BASE_URL}/campaign/${program.slug}`,
+        url: `${BASE_URL}/program/${program.slug}`,
         lastModified: new Date(), // Idealnya menggunakan field updated/_updatedAt dari Sanity
-        changeFrequency: 'hourly', // Diubah per jam karena nominal donasi dinamis berganti
+        changeFrequency: 'hourly', // Diubah per jam karena data/donasi dinamis berganti
         priority: 0.9,
       }));
     }
@@ -43,9 +43,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   try {
-    // 3. Fetch Rute Dinamis untuk Seluruh Kabar Berita/Blog
-    // Catatan: Jika Anda belum membuat endpoint global /api/news untuk list semua berita,
-    // pastikan endpoint ini mengembalikan array seluruh artikel yang ada di Sanity.
+    // 3. Fetch Rute Dinamis untuk Seluruh Kabar Berita/Blog Pesantren
     const resNews = await fetch(`${BASE_URL}/api/news`, { cache: 'no-store' });
     const jsonNews = await resNews.json();
     

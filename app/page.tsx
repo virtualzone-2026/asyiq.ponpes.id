@@ -9,19 +9,19 @@ import News from '@/components/News';
 // ===================================================================
 // 🌐 CONFIG METADATA OPEN GRAPH & TWITTER (ANTI-KOSONG DI MEDSOS)
 // ===================================================================
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lazisku.com';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
 
 export const metadata: Metadata = {
-  title: 'LAZIS Khoiro Ummah | Platform Sedekah, Infaq & Zakat Online Amanah',
-  description: 'Tunaikan kepedulian Anda dengan mudah. Salurkan sedekah subuh, infaq, dan zakat secara transparan dan amanah melalui lazisku.com.',
+  title: 'Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah',
+  description: 'Tunaikan kepedulian Anda dengan mudah. Dukung program pendidikan santri, pembangunan fasilitas, dan infaq operasional secara transparan dan amanah melalui asyiq.ponpes.id.',
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'LAZIS Khoiro Ummah | Platform Sedekah, Infaq & Zakat Online Amanah',
-    description: 'Tunaikan kepedulian Anda dengan mudah. Salurkan sedekah subuh, infaq, dan zakat secara transparan dan amanah melalui lazisku.com.',
+    title: 'Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah',
+    description: 'Tunaikan kepedulian Anda dengan mudah. Dukung program pendidikan santri, pembangunan fasilitas, dan infaq operasional secara transparan dan amanah melalui asyiq.ponpes.id.',
     url: `${siteUrl}/`,
-    siteName: 'LAZIS Khoiro Ummah',
+    siteName: 'Pondok Pesantren Asyiq',
     locale: 'id_ID',
     type: 'website',
     images: [
@@ -29,14 +29,14 @@ export const metadata: Metadata = {
         url: `${siteUrl}/images/banner-utama.png`, // 🚀 Banner utama beresolusi 1200x630 untuk pratinjau medsos
         width: 1200,
         height: 630,
-        alt: 'LAZIS Khoiro Ummah',
+        alt: 'Pondok Pesantren Asyiq',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'LAZIS Khoiro Ummah | Platform Sedekah, Infaq & Zakat Online Amanah',
-    description: 'Tunaikan kepedulian Anda dengan mudah. Salurkan sedekah subuh, infaq, dan zakat secara transparan dan amanah melalui lazisku.com.',
+    title: 'Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah',
+    description: 'Tunaikan kepedulian Anda dengan mudah. Dukung program pendidikan santri, pembangunan fasilitas, dan infaq operasional secara transparan dan amanah melalui asyiq.ponpes.id.',
     images: [`${siteUrl}/images/banner-utama.png`],
   },
 };
@@ -64,10 +64,10 @@ export default function HomePage() {
           <div className="space-y-6">
             <div className="border-l-4 border-emerald-500 pl-6 py-1">
               <h2 className="text-2xl md:text-3xl font-extrabold text-[#333333] tracking-tight">
-                Program Galang Dana
+                Program Pesantren & Galang Dana
               </h2>
               <p className="text-gray-500 mt-1 font-medium text-sm">
-                Salurkan infak terbaik Anda untuk berbagai sektor kebaikan
+                Salurkan infak dan donasi terbaik Anda untuk kemajuan pendidikan santri
               </p>
             </div>
             

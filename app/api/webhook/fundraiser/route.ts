@@ -21,11 +21,11 @@ export async function POST(request: Request) {
       }
 
       const messageText = 
-        `*Pendaftaran Fundraiser Lazisku Disetujui!* 🎉\n\n` +
+        `*Pendaftaran Fundraiser Asyiqul Quran Disetujui!* 🎉\n\n` +
         `Assalamu'alaikum *${name}*,\n\n` +
-        `Alhamdulillah, pengajuan Anda sebagai fundraiser untuk program *"${programTitle}"* telah resmi *DISETUJUI & DIAKTIFKAN* oleh admin LAZIS Khoiro Ummah.\n\n` +
+        `Alhamdulillah, pengajuan Anda sebagai fundraiser untuk program *"${programTitle}"* telah resmi *DISETUJUI & DIAKTIFKAN* oleh admin Asyiqul Quran.\n\n` +
         `Yuk, ambil tautan afiliasi unik Anda dan pantau perolehan donasi secara transparan melalui halaman resmi berikut:\n` +
-        `👉 https://www.lazisku.com/fundraiser/stats \n\n` +
+        `👉 https://www.asyiq.ponpes.id/fundraiser/stats \n\n` +
         `Cukup masukkan nomor WhatsApp Anda (*${phone}*) pada halaman tersebut untuk memunculkan link dan melihat riwayat donatur.\n\n` +
         `Jazakumullah Khairan Katsiran atas kontribusi terbaik Anda! 🙏`;
 

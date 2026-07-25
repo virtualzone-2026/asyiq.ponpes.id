@@ -5,11 +5,11 @@ export const dynamic = 'force-dynamic';
 
 // 🚀 BYPASS TEST: Memasukkan string token Editor langsung ke kode untuk melewati sumbatan Env Hosting
 const client = createClient({
-  projectId: '61d8vnuq', 
+  projectId: 'lsnco71s', 
   dataset: 'production',
   useCdn: false,
   apiVersion: '2024-01-01',
-  token: 'sk44JM4AlD6urcLa9Ak9vvnRpLGlsRai9aftW1wPA4w9zxwhrCpKREk2ArKU25K4kENIPxVXenu4kZhm2cOSaxGP69kz8az2qM2BZDIVzqyAGLjIvVTGKMu39CExUrKwbw2wCb2bfxKPgZ4lqEt2nwLZT4HEc4XT1qfrZ0i6KYupIlT6IOlP', 
+  token: 'skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh', 
 });
 
 export async function POST(request: Request) {
@@ -38,13 +38,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Kustomisasi invoice prefix berdasarkan slug program donasi
+    // Kustomisasi invoice prefix berdasarkan slug program donasi pesantren
     const cleanSlug = String(slug).toUpperCase();
-    const prefix = cleanSlug.includes('BERAS') ? 'BERAS' : cleanSlug.includes('MUALAF') ? 'MUALAF' : 'SUBUH';
+    const prefix = cleanSlug.includes('ASRAMA') ? 'ASRAMA' : cleanSlug.includes('SANTRI') ? 'SANTRI' : 'ASYIQ';
     const generatedOrderId = `INV-${prefix}-${Date.now()}`;
 
-    // Menggunakan slug 'lazis-khoiro-ummah' sesuai berkas gateway pembayaran
-    const pakasirProjectSlug = process.env.PAKASIR_PROJECT || process.env.PAKASIR_SLUG || 'lazis-khoiro-ummah';
+    // Mengubah default project slug gateway ke identitas Pondok Pesantren Asyiq
+    const pakasirProjectSlug = process.env.PAKASIR_PROJECT || process.env.PAKASIR_SLUG || 'pesantren-asyiq';
     const pakasirApiKey = process.env.PAKASIR_API_KEY || '';
 
     // Validasi internal sebelum fetch dilakukan agar parameter tidak kosong ke API Pakasir
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const paymentNumber = pakasirData.payment.payment_number || '';
     
     // Penyusunan Link web-checkout alternatif
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lazisku.com';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
     const isQrisOnly = cleanMethod === 'qris' ? '&qris_only=1' : '';
     
     const fallbackUrlWeb = `https://app.pakasir.com/pay/${pakasirProjectSlug}/${cleanAmountNumber}?order_id=${generatedOrderId}${isQrisOnly}&redirect=${encodeURIComponent(`${siteUrl}/thank-you?order_id=${generatedOrderId}`)}`;

@@ -5,12 +5,12 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-// 1. Komponen Utama Konten Thank You LAZISKU
+// 1. Komponen Utama Konten Thank You Pesantren Asyiq
 function ThankYouContent() {
   const searchParams = useSearchParams();
   
   // 🚀 PAKASIR COMPATIBILITY: Menangkap parameter 'order_id' atau 'id' yang dilempar otomatis oleh redirect gateway Pakasir
-  const orderId = searchParams.get('order_id') || searchParams.get('id') || 'INV-SUBUH-XXXXXX';
+  const orderId = searchParams.get('order_id') || searchParams.get('id') || 'INV-ASYIQ-XXXXXX';
 
   return (
     <div className="max-w-md w-full bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-md transition-all duration-300 text-center">
@@ -22,16 +22,16 @@ function ThankYouContent() {
           </svg>
         </div>
 
-        {/* Judul & Kalimat Apresiasi Khas LAZISKU */}
+        {/* Judul & Kalimat Apresiasi Khas Pesantren Asyiq */}
         <h1 className="text-2xl md:text-3xl font-extrabold text-[#333333] tracking-tight">
           Alhamdulillah!
         </h1>
         <p className="text-xs font-semibold text-emerald-600 uppercase tracking-widest mt-1">
-          Donasi Terverifikasi ➔
+          Pembayaran/Donasi Terverifikasi ➔
         </p>
         
         <p className="text-xs md:text-sm text-gray-500 mt-4 mb-6 leading-relaxed font-medium tracking-wide">
-          Infak/Sedekah Anda telah berhasil diterima oleh sistem **lazisku.com** secara otomatis. Terima kasih banyak atas kepercayaan Anda menyalurkan dana kebajikan melalui kami, semoga menjadi aliran amal jariyah yang berlipat ganda serta mendatangkan keberkahan bagi Anda sekeluarga. Amin.
+          Transaksi atau infak Anda telah berhasil diterima oleh sistem **asyiq.ponpes.id** secara otomatis. Terima kasih banyak atas kepercayaan Anda menyalurkan dana kebajikan melalui kami, semoga menjadi aliran amal jariyah yang berlipat ganda serta mendatangkan keberkahan bagi Anda sekeluarga. Amin.
         </p>
 
         {/* Kotak Status Detail Transaksi */}

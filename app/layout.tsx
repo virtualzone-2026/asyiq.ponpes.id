@@ -28,60 +28,58 @@ const serverClient = createClient({
 // 🚀 MASTER SEO & PWA METADATA READY
 export const metadata: Metadata = {
   title: {
-    default: "LAZIS Khoiro Ummah | Platform Sedekah, Infaq & Zakat Online Amanah",
-    template: "%s | LAZIS Khoiro Ummah"
+    default: "Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah",
+    template: "%s | Pondok Pesantren Asyiq"
   },
-  description: "Salurkan sedekah, infaq, zakat, dan wakaf Anda secara instan and amanah melalui LAZIS Khoiro Ummah (lazisku.com). Mengalirkan keberkahan dan kepedulian untuk pemberdayaan ummat, yatim, dhuafa, dan program sosial kemanusiaan.",
+  description: "Salurkan infaq, donasi pendidikan, zakat, dan wakaf Anda secara instan dan amanah melalui Pondok Pesantren Asyiq (asyiq.ponpes.id). Mengalirkan keberkahan untuk kemajuan pendidikan santri, fasilitas pesantren, dan program dakwah ummat.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "LAZISku",
+    title: "Pesantren Asyiq",
   },
   keywords: [
-    "lazis khoiro ummah",
-    "lazisku",
-    "lazisku com",
-    "sedekah online",
+    "pondok pesantren asyiq",
+    "pesantren asyiq",
+    "asyiq ponpes id",
+    "donasi pesantren",
     "infaq online",
     "bayar zakat online",
-    "wakaf quran",
-    "sedekah subuh",
-    "donasi yatim dhuafa",
-    "lembaga amil zakat amanah",
-    "donasi qris instant",
-    "lazis banyumas",
-    "khoiro ummah bina umat"
+    "wakaf pembangunan",
+    "donasi santri",
+    "lembaga pendidikan islam amanah",
+    "infaq produktif",
+    "pesantren asyiq banyumas"
   ],
-  authors: [{ name: "LAZIS Khoiro Ummah", url: "https://lazisku.com" }],
-  creator: "LAZIS Khoiro Ummah",
-  publisher: "LAZIS Khoiro Ummah",
-  metadataBase: new URL("https://lazisku.com"),
+  authors: [{ name: "Pondok Pesantren Asyiq", url: "https://www.asyiq.ponpes.id" }],
+  creator: "Pondok Pesantren Asyiq",
+  publisher: "Pondok Pesantren Asyiq",
+  metadataBase: new URL("https://www.asyiq.ponpes.id"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "LAZIS Khoiro Ummah | Platform Sedekah, Infaq & Zakat Online Amanah",
-    description: "Tunaikan kepedulian Anda dengan mudah. Salurkan sedekah subuh, infaq produktif, dan zakat mal/fitrah secara transparan dan otomatis via QRIS & Virtual Account bersama lazisku.com.",
-    url: "https://lazisku.com",
-    siteName: "LAZIS Khoiro Ummah",
+    title: "Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah",
+    description: "Tunaikan kepedulian Anda dengan mudah. Dukung program pendidikan santri, pembangunan fasilitas, dan infaq operasional secara transparan dan otomatis via QRIS & Virtual Account bersama asyiq.ponpes.id.",
+    url: "https://www.asyiq.ponpes.id",
+    siteName: "Pondok Pesantren Asyiq",
     locale: "id_ID",
     type: "website",
     images: [
       {
-        url: "https://lazisku.com/images/banner.png",
+        url: "https://www.asyiq.ponpes.id/images/banner.png",
         width: 1200,
         height: 630,
         type: "image/png",
-        alt: "LAZIS Khoiro Ummah - Mengalirkan Keberkahan Melalui Sedekah dan Infaq",
+        alt: "Pondok Pesantren Asyiq - Mengalirkan Keberkahan Melalui Pendidikan dan Infaq",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "LAZIS Khoiro Ummah | Sedekah & Infaq Online Mudah",
-    description: "Platform resmi galang donasi, sedekah, infaq, dan zakat amanah bersama LAZIS Khoiro Ummah.",
-    images: ["https://lazisku.com/images/banner.png"],
+    title: "Pondok Pesantren Asyiq | Donasi & Infaq Pendidikan Online Mudah",
+    description: "Platform resmi galang donasi, infaq, dan wakaf amanah bersama Pondok Pesantren Asyiq.",
+    images: ["https://www.asyiq.ponpes.id/images/banner.png"],
   },
   robots: {
     index: true,
@@ -135,8 +133,8 @@ export default async function RootLayout({
 
         // 🚀 LOGIKA AMBIL PROGRAM ASLI:
         // 1. Pakai judul dari relasi Sanity jika ada.
-        // 2. Jika relasi kosong, format dari field slug transaksi (misal: "sedekah-subuh" -> "Sedekah Subuh").
-        // 3. Fallback terakhir ke "Sedekah".
+        // 2. Jika relasi kosong, format dari field slug transaksi (misal: "pembangunan-asrama" -> "Pembangunan Asrama").
+        // 3. Fallback terakhir ke "Infaq Pesantren".
         let displayProgram = item.program;
 
         if (!displayProgram && item.slug) {
@@ -146,7 +144,7 @@ export default async function RootLayout({
         }
 
         if (!displayProgram) {
-          displayProgram = "Sedekah";
+          displayProgram = "Infaq Pesantren";
         }
 
         return {

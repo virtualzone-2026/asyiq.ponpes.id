@@ -53,13 +53,13 @@ function SearchResultsContent() {
         {!loading && results.length > 0 ? (
           <div className="space-y-7 max-w-3xl">
             {results.map((item) => {
-              // Menyesuaikan target routing dengan struktur proyek lazisku.com
+              // Menyesuaikan target routing dengan struktur proyek asyiq.ponpes.id
               const targetUrl = item.type === 'news' ? `/blog/${item.slug}` : `/program/${item.slug}`;
               
-              // 🚀 FIXED: Menyelaraskan teks URL display tiruan Google ke lazisku.com
+              // 🚀 FIXED: Menyelaraskan teks URL display tiruan Google ke asyiq.ponpes.id
               const displayUrl = item.type === 'news' 
-                ? `https://www.lazisku.com › blog › ${item.slug}` 
-                : `https://www.lazisku.com › program › ${item.slug}`;
+                ? `https://www.asyiq.ponpes.id › blog › ${item.slug}` 
+                : `https://www.asyiq.ponpes.id › program › ${item.slug}`;
 
               return (
                 <div key={item.id} className="group flex flex-col space-y-1 text-left">
@@ -77,11 +77,11 @@ function SearchResultsContent() {
                     {item.title}
                   </Link>
 
-                  {/* Deskripsi Snippet Khusus LAZIS Khoiro Ummah */}
+                  {/* Deskripsi Snippet Khusus Pesantren Asyiq */}
                   <p className="text-sm text-[#4d5156] leading-relaxed font-normal pt-0.5 line-clamp-2">
                     {item.type === 'news' 
-                      ? `Kabar dan laporan penyaluran berkala dari Tim Media LAZIS Khoiro Ummah mengenai update penanganan program ${item.title}. Simak akuntabilitas selengkapnya...`
-                      : `Program kebaikan Ziswaf LAZIS Khoiro Ummah untuk kategori ${item.category || 'Inspirasi'}. Salurkan infak terbaik Anda secara praktis, amanah, dan instan via QRIS...`
+                      ? `Informasi dan berita resmi dari lingkungan Pondok Pesantren Asyiq mengenai update kegiatan serta perkembangan ${item.title}. Simak selengkapnya...`
+                      : `Program unggulan Pondok Pesantren Asyiq untuk kategori ${item.category || 'Pendidikan'}. Kenali lebih dekat profil, kurikulum, dan informasi pendaftaran santri...`
                     }
                   </p>
 
@@ -95,11 +95,11 @@ function SearchResultsContent() {
         {!loading && results.length === 0 && queryParam.trim() !== '' && (
           <div className="py-8 space-y-3 max-w-2xl text-left">
             <p className="text-base text-gray-800">
-              Penelusuran Anda - <strong className="font-semibold">{queryParam}</strong> - tidak cocok dengan dokumen program atau kabar berita apa pun di LAZIS Khoiro Ummah.
+              Penelusuran Anda - <strong className="font-semibold">{queryParam}</strong> - tidak cocok dengan dokumen program atau kabar berita apa pun di Pondok Pesantren Asyiq.
             </p>
             <ul className="list-disc pl-6 text-sm text-gray-600 space-y-1 font-normal">
-              <li>Pastikan semua kata dieja dengan benar sesuai penulisan program amil.</li>
-              <li>Coba kata kunci lain yang lebih umum (misal: "Sumur", "Santri", "Sedekah", "Zakat").</li>
+              <li>Pastikan semua kata dieja dengan benar sesuai penulisan informasi pesantren.</li>
+              <li>Coba kata kunci lain yang lebih umum (misal: "Pesantren", "Santri", "Pendaftaran", "Program").</li>
               <li>Coba kurangi jumlah kata kunci penelusuran.</li>
             </ul>
           </div>

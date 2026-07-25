@@ -16,8 +16,8 @@ const emeraldTheme = buildLegacyTheme({
 // 🚀 MENGGUNAKAN ID WORKSPACE YANG SESUAI DENGAN PERMINTAAN LENGKAP ANDA
 export default defineConfig([
   {
-    name: 'lazis-khoiro-ummah', // ➔ Ini menggantikan ID url/teks kecil bawaan 'lazisku'
-    title: 'Lazis Khoiro Ummah', // ➔ Ini nama utama di dropdown menu
+    name: 'asyiq-ponpes-id', // ➔ Ini menggantikan ID url/teks kecil bawaan 'lazisku'
+    title: 'Asyiqul Quran', // ➔ Ini nama utama di dropdown menu
     projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'ID_PROJECT_ANDA',
     dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || 'production',
     basePath: '/studio',
