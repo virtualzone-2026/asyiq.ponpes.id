@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     // Gunakan payment_url bawaan dari objek gateway jika tersedia, atau arahkan ke fallback link web checkout
     const paymentUrl = pakasirData.payment.payment_url || fallbackUrlWeb;
 
-    // 🚀 1. MENULIS DATA TRANSAKSI LENGKAP KE SANITY
+    // 🚀 1. MENULIS DATA TRANSAKSI LENGKAP KE SANITY (Waktu disesuaikan WIB)
     await client.create({
       _type: 'donationTransaction',
       orderId: String(generatedOrderId),
@@ -112,11 +112,18 @@ export async function POST(request: Request) {
 
     console.log(`🔒 TRANSAKSI BERHASIL DICATAT DI SANITY: ${generatedOrderId} | Fundraiser: ${fundraiserPhone || 'Non-Afiliasi'}`);
 
-    // 🚀 2. SYNC KE GOOGLE SHEET
+    // 🚀 2. SYNC KE GOOGLE SHEET (Menggunakan format tanggal waktu WIB yang akurat)
     const googleSheetScriptUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL || '';
 
     if (googleSheetScriptUrl && googleSheetScriptUrl.trim()) {
       try {
+        // Memastikan tanggal dan jam akurat menggunakan zona waktu Asia/Jakarta (WIB)
+        const currentWibTimestamp = new Date().toLocaleString('id-ID', { 
+          timeZone: 'Asia/Jakarta',
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        });
+
         await fetch(googleSheetScriptUrl.trim(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -129,10 +136,10 @@ export async function POST(request: Request) {
             paymentMethod: cleanMethod,
             fundraiserPhone: fundraiserPhone ? `'${String(fundraiserPhone)}` : '-',
             status: 'pending',
-            createdAt: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+            createdAt: currentWibTimestamp
           }),
         });
-        console.log(`📊 DATA SINKRON KE GOOGLE SHEET: ${generatedOrderId}`);
+        console.log(`📊 DATA SINKRON KE GOOGLE SHEET: ${generatedOrderId} pada ${currentWibTimestamp}`);
       } catch (sheetError) {
         console.error('🔥 Gagal mengirim data transaksi ke Google Sheet:', sheetError);
       }

@@ -16,22 +16,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 🚀 INITIALIZE SANITY CLIENT (Server-Side Direct Bypass)
+// 🚀 INITIALIZE SANITY CLIENT (Disesuaikan dengan Project ID Sanity Proyek 'Aasyiqul Qur'an)
 const serverClient = createClient({
-  projectId: "61d8vnuq",
+  projectId: "lsnco71s", // ID Sanity Studio baru Anda
   dataset: "production",
   useCdn: false, // Wajib false agar data donasi terbaru real-time langsung tertangkap
   apiVersion: "2024-01-01",
-  token: "sk44JM4AlD6urcLa9Ak9vvnRpLGlsRai9aftW1wPA4w9zxwhrCpKREk2ArKU25K4kENIPxVXenu4kZhm2cOSaxGP69kz8az2qM2BZDIVzqyAGLjIvVTGKMu39CExUrKwbw2wCb2bfxKPgZ4lqEt2nwLZT4HEc4XT1qfrZ0i6KYupIlT6IOlP",
+  token: "skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh",
 });
 
 // 🚀 MASTER SEO & PWA METADATA READY
 export const metadata: Metadata = {
   title: {
-    default: "Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah",
-    template: "%s | Pondok Pesantren Asyiq"
+    default: "Pondok Pesantren 'Aasyiqul Qur'an | Platform Pendidikan, Donasi & Infaq Online Amanah",
+    template: "%s | Pondok Pesantren 'Aasyiqul Qur'an"
   },
-  description: "Salurkan infaq, donasi pendidikan, zakat, dan wakaf Anda secara instan dan amanah melalui Pondok Pesantren Asyiq (asyiq.ponpes.id). Mengalirkan keberkahan untuk kemajuan pendidikan santri, fasilitas pesantren, dan program dakwah ummat.",
+  description: "Salurkan infaq, donasi pendidikan, zakat, dan wakaf Anda secara instan dan amanah melalui Pondok Pesantren 'Aasyiqul Qur'an (asyiq.ponpes.id). Mengalirkan keberkahan untuk kemajuan pendidikan santri, fasilitas pesantren, dan program dakwah ummat.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -39,8 +39,8 @@ export const metadata: Metadata = {
     title: "Pesantren Asyiq",
   },
   keywords: [
-    "pondok pesantren asyiq",
-    "pesantren asyiq",
+    "pondok pesantren aasyiqul quran",
+    "pesantren aasyiqul quran",
     "asyiq ponpes id",
     "donasi pesantren",
     "infaq online",
@@ -49,20 +49,20 @@ export const metadata: Metadata = {
     "donasi santri",
     "lembaga pendidikan islam amanah",
     "infaq produktif",
-    "pesantren asyiq banyumas"
+    "pesantren aasyiq banyumas"
   ],
-  authors: [{ name: "Pondok Pesantren Asyiq", url: "https://www.asyiq.ponpes.id" }],
-  creator: "Pondok Pesantren Asyiq",
-  publisher: "Pondok Pesantren Asyiq",
+  authors: [{ name: "Pondok Pesantren 'Aasyiqul Qur'an", url: "https://www.asyiq.ponpes.id" }],
+  creator: "Pondok Pesantren 'Aasyiqul Qur'an",
+  publisher: "Pondok Pesantren 'Aasyiqul Qur'an",
   metadataBase: new URL("https://www.asyiq.ponpes.id"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Pondok Pesantren Asyiq | Platform Pendidikan, Donasi & Infaq Online Amanah",
+    title: "Pondok Pesantren 'Aasyiqul Qur'an | Platform Pendidikan, Donasi & Infaq Online Amanah",
     description: "Tunaikan kepedulian Anda dengan mudah. Dukung program pendidikan santri, pembangunan fasilitas, dan infaq operasional secara transparan dan otomatis via QRIS & Virtual Account bersama asyiq.ponpes.id.",
     url: "https://www.asyiq.ponpes.id",
-    siteName: "Pondok Pesantren Asyiq",
+    siteName: "Pondok Pesantren 'Aasyiqul Qur'an",
     locale: "id_ID",
     type: "website",
     images: [
@@ -71,14 +71,14 @@ export const metadata: Metadata = {
         width: 1200,
         height: 630,
         type: "image/png",
-        alt: "Pondok Pesantren Asyiq - Mengalirkan Keberkahan Melalui Pendidikan dan Infaq",
+        alt: "Pondok Pesantren 'Aasyiqul Qur'an - Mengalirkan Keberkahan Melalui Pendidikan dan Infaq",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pondok Pesantren Asyiq | Donasi & Infaq Pendidikan Online Mudah",
-    description: "Platform resmi galang donasi, infaq, dan wakaf amanah bersama Pondok Pesantren Asyiq.",
+    title: "Pondok Pesantren 'Aasyiqul Qur'an | Donasi & Infaq Pendidikan Online Mudah",
+    description: "Platform resmi galang donasi, infaq, dan wakaf amanah bersama Pondok Pesantren 'Aasyiqul Qur'an.",
     images: ["https://www.asyiq.ponpes.id/images/banner.png"],
   },
   robots: {
@@ -106,7 +106,7 @@ export default async function RootLayout({
   let dynamicDonations: Donation[] = [];
 
   try {
-    // 🔥 GROQ QUERY JUJUR: Tarik nama program dari relasi, atau tangkap slug transaksi
+    // 🔥 GROQ QUERY: Tarik transaksi sukses dari Sanity Studio 'Aasyiqul Qur'an baru
     const rawData = await serverClient.fetch(
       `*[_type == "donationTransaction" && status == "success"] | order(_createdAt desc)[0...10] {
         "id": _id,
@@ -128,13 +128,15 @@ export default async function RootLayout({
         if (diffMins > 0 && diffMins < 60) {
           timeLabel = `${diffMins} menit yang lalu`;
         } else if (diffMins >= 60) {
-          timeLabel = `${Math.floor(diffMins / 60)} jam yang lalu`;
+          const diffHours = Math.floor(diffMins / 60);
+          if (diffHours < 24) {
+            timeLabel = `${diffHours} jam yang lalu`;
+          } else {
+            timeLabel = `${Math.floor(diffHours / 24)} hari yang lalu`;
+          }
         }
 
         // 🚀 LOGIKA AMBIL PROGRAM ASLI:
-        // 1. Pakai judul dari relasi Sanity jika ada.
-        // 2. Jika relasi kosong, format dari field slug transaksi (misal: "pembangunan-asrama" -> "Pembangunan Asrama").
-        // 3. Fallback terakhir ke "Infaq Pesantren".
         let displayProgram = item.program;
 
         if (!displayProgram && item.slug) {
@@ -144,7 +146,7 @@ export default async function RootLayout({
         }
 
         if (!displayProgram) {
-          displayProgram = "Infaq Pesantren";
+          displayProgram = "Infaq & Wakaf Pesantren";
         }
 
         return {
