@@ -1,7 +1,9 @@
+// app/components/Hero.tsx
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Hero() {
   return (
@@ -30,12 +32,23 @@ export default function Hero() {
       {/* 4. Konten Utama Terpusat (Max-w-5xl agar Fokus Baca Nyaman) */}
       <div className="relative z-20 max-w-5xl mx-auto px-6 md:px-12 w-full text-center flex flex-col items-center">
         
-        {/* Tagline Yayasan dengan Aksen Border Tech */}
-        <div className="inline-flex items-center gap-2 mb-8 bg-emerald-950/50 border border-emerald-500/30 px-4 py-2 rounded shadow-[0_0_20px_rgba(16,185,129,0.05)]">
-          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-          <span className="text-[10px] md:text-xs font-black tracking-widest text-emerald-400 uppercase">
-            Pondok Pesantren 'Aasyiqul Qur'an
-          </span>
+        {/* Logo & Tagline Yayasan dengan Aksen Border Tech */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="relative w-20 h-20 md:w-24 md:h-24 mb-4 drop-shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+            <Image
+              src="/images/logo-lazisku.png"
+              alt="Logo Pondok Pesantren Aasyiqul Qur'an"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="inline-flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 px-4 py-2 rounded shadow-[0_0_20px_rgba(16,185,129,0.05)]">
+            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+            <span className="text-[10px] md:text-xs font-black tracking-widest text-emerald-400 uppercase">
+              Pondok Pesantren 'Aasyiqul Qur'an
+            </span>
+          </div>
         </div>
 
         {/* Headline Utama: Kokoh, Padat & Berkarakter */}
@@ -62,6 +75,7 @@ export default function Hero() {
           <span className="relative z-10 flex items-center gap-2">
             ★ Donasi & Infaq Sekarang
           </span>
+          
           <svg 
             className="w-4 h-4 transition-transform duration-300 ease-out group-hover:translate-x-1 relative z-10" 
             fill="none" 
