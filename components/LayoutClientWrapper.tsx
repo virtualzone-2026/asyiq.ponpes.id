@@ -1,31 +1,70 @@
 // components/LayoutClientWrapper.tsx
-'use client'; // 🚀 Di sinilah letak 'use client' agar root layout tetap menjadi Server Component
+
+'use client';
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 
-export default function LayoutClientWrapper({ children }: { children: React.ReactNode }) {
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+
+export default function LayoutClientWrapper({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
 
-  // Cek apakah halaman yang dibuka adalah Dashboard Sanity Studio
-  const isStudioPage = pathname?.startsWith('/studio');
+  // =========================================================
+  // HALAMAN KHUSUS YANG TIDAK MEMAKAI LAYOUT WEBSITE PUBLIK
+  // =========================================================
+
+  // Sanity Studio
+  const isStudioPage =
+    pathname === '/studio' ||
+    pathname?.startsWith('/studio/');
+
+  // Dashboard / area fundraiser
+  //
+  // Berlaku untuk:
+  // /fundraiser
+  // /fundraiser/stats
+  // /fundraiser/dashboard
+  // dan semua route di bawah /fundraiser
+  const isFundraiserPage =
+    pathname === '/fundraiser' ||
+    pathname?.startsWith('/fundraiser/');
+
+  // =========================================================
+  // TENTUKAN APAKAH HEADER / FOOTER DISEMBUNYIKAN
+  // =========================================================
+
+  const hidePublicLayout =
+    isStudioPage || isFundraiserPage;
 
   return (
-    <>
-      {/* 1. Kondisional Header: Muncul hanya jika BUKAN halaman studio */}
-      {!isStudioPage && <Header />}
-      
-      {/* 2. Konten Utama Halaman website */}
-      <main className="flex-grow">
+    <div className="min-h-screen flex flex-col">
+      {/* =====================================================
+          HEADER WEBSITE PUBLIK
+          Tidak tampil di Studio & Dashboard Fundraiser
+      ===================================================== */}
+
+      {!hidePublicLayout && <Header />}
+
+      {/* =====================================================
+          KONTEN UTAMA
+      ===================================================== */}
+
+      <main className="flex-1">
         {children}
       </main>
-      
-      {/* ❌ SEKSI 3: TOMBOL WHATSAPP MELAYANG GLOBAL TELAH DIHAPUS TOTAL */}
-      
-      {/* 4. Kondisional Footer: Muncul hanya jika BUKAN halaman studio */}
-      {!isStudioPage && <Footer />}
-    </>
+
+      {/* =====================================================
+          FOOTER WEBSITE PUBLIK
+          Tidak tampil di Studio & Dashboard Fundraiser
+      ===================================================== */}
+
+      {!hidePublicLayout && <Footer />}
+    </div>
   );
 }
