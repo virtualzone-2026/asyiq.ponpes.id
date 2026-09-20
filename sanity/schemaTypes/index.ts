@@ -1,23 +1,23 @@
-// schemas/index.ts
+// sanity/schemaTypes/index.ts
 
 // =========================================================
-// SCHEMA UTAMA
+// SCHEMA PROGRAM & KONTEN
 // =========================================================
 
 import program from './program';
-import news from './news';
-import category from './category';
-import donationTransaction from './donationTransaction';
 import laporan from './laporan';
+import category from './category';
+import news from './news';
+import donationTransaction from './donationTransaction';
 
 // =========================================================
-// FUNDRAISER
+// SCHEMA FUNDRAISER
 // =========================================================
 
-// Data pendaftaran / profil fundraiser
+// Profil / pendaftaran fundraiser
 import fundraiser from './fundraiser';
 
-// Data pengajuan & riwayat penarikan komisi fundraiser
+// Pengajuan, pencairan, dan riwayat komisi fundraiser
 import fundraiserWithdrawal from './fundraiserWithdrawal';
 
 // =========================================================
@@ -25,28 +25,25 @@ import fundraiserWithdrawal from './fundraiserWithdrawal';
 // =========================================================
 
 export const schemaTypes = [
-  // Program donasi
+  // =======================================================
+  // PROGRAM & KONTEN
+  // =======================================================
+
   program,
 
-  // Laporan yayasan / penyaluran
   laporan,
 
-  // Kategori berita / artikel
   category,
 
-  // Berita & artikel
   news,
 
-  // Transaksi donasi
   donationTransaction,
 
   // =======================================================
   // FUNDRAISER
   // =======================================================
 
-  // Profil / pendaftaran fundraiser
   fundraiser,
 
-  // Pengajuan & histori pencairan komisi
   fundraiserWithdrawal,
 ];
