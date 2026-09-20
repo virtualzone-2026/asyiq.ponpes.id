@@ -1,18 +1,52 @@
 // schemas/index.ts
-import program from './program';           // File skema program donasi Anda
-import news from './news';                 // Skema kabar berita
-import category from './category';         // Skema kategori artikel/berita
-import donationTransaction from './donationTransaction'; // Penampung data transaksi pending (Nama & WA)
-import laporan from './laporan';           // Skema laporan yayasan
-// 🚀 FIXED: Mengimpor skema pendaftaran fundraiser yang baru dibuat
-import fundraiser from './fundraiser'; 
+
+// =========================================================
+// SCHEMA UTAMA
+// =========================================================
+
+import program from './program';
+import news from './news';
+import category from './category';
+import donationTransaction from './donationTransaction';
+import laporan from './laporan';
+
+// =========================================================
+// FUNDRAISER
+// =========================================================
+
+// Data pendaftaran / profil fundraiser
+import fundraiser from './fundraiser';
+
+// Data pengajuan & riwayat penarikan komisi fundraiser
+import fundraiserWithdrawal from './fundraiserWithdrawal';
+
+// =========================================================
+// DAFTAR SELURUH SCHEMA
+// =========================================================
 
 export const schemaTypes = [
+  // Program donasi
   program,
-  laporan, 
-  category, 
-  news,      
+
+  // Laporan yayasan / penyaluran
+  laporan,
+
+  // Kategori berita / artikel
+  category,
+
+  // Berita & artikel
+  news,
+
+  // Transaksi donasi
   donationTransaction,
-  // 🚀 FIXED: Didaftarkan ke dalam array agar aktif di dashboard & API Sanity Studio
-  fundraiser
+
+  // =======================================================
+  // FUNDRAISER
+  // =======================================================
+
+  // Profil / pendaftaran fundraiser
+  fundraiser,
+
+  // Pengajuan & histori pencairan komisi
+  fundraiserWithdrawal,
 ];

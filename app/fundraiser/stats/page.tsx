@@ -1,243 +1,1284 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { FormEvent, useMemo, useState } from 'react';
+import {
+  ArrowUpRight,
+  Banknote,
+  Check,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock3,
+  Copy,
+  HandCoins,
+  History,
+  Landmark,
+  Link2,
+  LoaderCircle,
+  RefreshCw,
+  Share2,
+  ShieldCheck,
+  Users,
+  WalletCards,
+  X,
+  XCircle,
+} from 'lucide-react';
+
+// ==========================================================
+// TYPES
+// ==========================================================
+
+type FundraiserProfile = {
+  name: string;
+  phone?: string;
+  status?: string;
+  feePaid?: number;
+  programSlug?: string;
+
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+};
+
+type Program = {
+  slug: string;
+  title: string;
+};
+
+type DonationHistory = {
+  _id?: string;
+  donorName?: string;
+  amount?: number;
+  programTitle?: string;
+  createdAt?: string;
+  paidAt?: string;
+};
+
+type WithdrawalStatus =
+  | 'pending'
+  | 'approved'
+  | 'paid'
+  | 'completed'
+  | 'rejected'
+  | 'cancelled';
+
+type WithdrawalHistory = {
+  _id?: string;
+  amount: number;
+  status: WithdrawalStatus;
+
+  requestedAt?: string;
+  processedAt?: string;
+  paidAt?: string;
+
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+
+  referenceNumber?: string;
+  note?: string;
+  adminNote?: string;
+};
+
+type FundraiserStats = {
+  success: boolean;
+
+  profile: FundraiserProfile;
+
+  totalEarnings: number;
+  donationCount: number;
+
+  programs?: Program[];
+  history?: DonationHistory[];
+
+  // DATA BARU
+  withdrawals?: WithdrawalHistory[];
+
+  commissionRate?: number;
+  totalCommission?: number;
+  totalWithdrawn?: number;
+  pendingWithdrawal?: number;
+  availableCommission?: number;
+
+  withdrawalConfig?: {
+    minimum?: number;
+    maximum?: number;
+    enabled?: boolean;
+  };
+};
+
+// ==========================================================
+// HELPERS
+// ==========================================================
+
+const rupiah = (value: number | null | undefined) => {
+  return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+};
+
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+
+  try {
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+  } catch {
+    return '-';
+  }
+};
+
+const cleanPhoneNumber = (value: string) =>
+  value.replace(/[^0-9]/g, '');
+
+const getWithdrawalStatus = (status?: WithdrawalStatus) => {
+  switch (status) {
+    case 'paid':
+    case 'completed':
+      return {
+        label: 'Sudah Dibayar',
+        icon: CheckCircle2,
+        className:
+          'bg-emerald-50 text-emerald-700 border-emerald-200',
+      };
+
+    case 'approved':
+      return {
+        label: 'Disetujui',
+        icon: ShieldCheck,
+        className:
+          'bg-blue-50 text-blue-700 border-blue-200',
+      };
+
+    case 'rejected':
+      return {
+        label: 'Ditolak',
+        icon: XCircle,
+        className:
+          'bg-red-50 text-red-700 border-red-200',
+      };
+
+    case 'cancelled':
+      return {
+        label: 'Dibatalkan',
+        icon: X,
+        className:
+          'bg-gray-50 text-gray-600 border-gray-200',
+      };
+
+    default:
+      return {
+        label: 'Menunggu',
+        icon: Clock3,
+        className:
+          'bg-amber-50 text-amber-700 border-amber-200',
+      };
+  }
+};
+
+// ==========================================================
+// COMPONENT
+// ==========================================================
 
 export default function FundraiserStatsPage() {
   const [phone, setPhone] = useState('');
+
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<FundraiserStats | null>(null);
   const [error, setError] = useState('');
-  
-  // 🚀 STATE: Mengontrol pilihan program di dropdown & feedback salin
+
   const [selectedSlug, setSelectedSlug] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const handleCheckStats = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phone) return;
+  const [activeTab, setActiveTab] = useState<
+    'donations' | 'withdrawals'
+  >('donations');
+
+  // ========================================================
+  // WITHDRAWAL
+  // ========================================================
+
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawNote, setWithdrawNote] = useState('');
+
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawMessage, setWithdrawMessage] = useState('');
+  const [withdrawError, setWithdrawError] = useState('');
+
+  // ========================================================
+  // LOAD STATS
+  // ========================================================
+
+  const loadStats = async (rawPhone: string) => {
+    const cleanedPhone = cleanPhoneNumber(rawPhone);
+
+    if (!cleanedPhone) return;
 
     setLoading(true);
     setError('');
-    setStats(null);
-    setSelectedSlug(''); // Reset pilihan dropdown setiap cek nomor baru
-    setCopied(false);
 
     try {
-      const res = await fetch(`/api/fundraiser/stats?phone=${phone}`);
+      const res = await fetch(
+        `/api/fundraiser/stats?phone=${encodeURIComponent(
+          cleanedPhone
+        )}&t=${Date.now()}`,
+        {
+          cache: 'no-store',
+        }
+      );
+
       const json = await res.json();
-      
-      if (json.success) {
-        setStats(json);
-      } else {
-        setError(json.message || 'Gagal mengambil data statistik.');
+
+      if (!res.ok || !json.success) {
+        setStats(null);
+        setError(
+          json.message ||
+            'Data fundraiser tidak berhasil ditemukan.'
+        );
+        return;
       }
+
+      setStats(json);
     } catch (err) {
-      setError('Terjadi gangguan jaringan saat memuat data.');
+      console.error(err);
+
+      setStats(null);
+      setError(
+        'Terjadi gangguan jaringan saat memuat data fundraiser.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCheckStats = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (!phone) return;
+
+    setSelectedSlug('');
+    setCopied(false);
+    setShowWithdrawal(false);
+    setWithdrawMessage('');
+    setWithdrawError('');
+
+    await loadStats(phone);
   };
 
+  // ========================================================
+  // CALCULATIONS
+  // ========================================================
+
+  const withdrawals = stats?.withdrawals || [];
+
+  const commissionRate = stats?.commissionRate ?? 0.1;
+
+  const totalDonation = Number(stats?.totalEarnings || 0);
+
+  const totalCommission =
+    stats?.totalCommission ??
+    Math.round(totalDonation * commissionRate);
+
+  const withdrawalCalculated = useMemo(() => {
+    return withdrawals.reduce(
+      (acc, item) => {
+        const amount = Number(item.amount || 0);
+
+        if (
+          item.status === 'paid' ||
+          item.status === 'completed'
+        ) {
+          acc.paid += amount;
+        }
+
+        if (
+          item.status === 'pending' ||
+          item.status === 'approved'
+        ) {
+          acc.pending += amount;
+        }
+
+        return acc;
+      },
+      {
+        paid: 0,
+        pending: 0,
+      }
+    );
+  }, [withdrawals]);
+
+  const totalWithdrawn =
+    stats?.totalWithdrawn ??
+    stats?.profile?.feePaid ??
+    withdrawalCalculated.paid;
+
+  const pendingWithdrawal =
+    stats?.pendingWithdrawal ??
+    withdrawalCalculated.pending;
+
+  const availableCommission =
+    stats?.availableCommission ??
+    Math.max(
+      0,
+      totalCommission -
+        totalWithdrawn -
+        pendingWithdrawal
+    );
+
+  // ========================================================
+  // AFFILIATE LINK
+  // ========================================================
+
+  const affiliateUrl = useMemo(() => {
+    if (!selectedSlug) return '';
+
+    const baseUrl =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : '';
+
+    return `${baseUrl}/campaign/${selectedSlug}?ref=${cleanPhoneNumber(
+      phone
+    )}`;
+  }, [selectedSlug, phone]);
+
+  const handleCopy = async () => {
+    if (!affiliateUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(affiliateUrl);
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      alert('Tautan tidak berhasil disalin.');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!affiliateUrl) return;
+
+    const program = stats?.programs?.find(
+      (item) => item.slug === selectedSlug
+    );
+
+    const message = [
+      program?.title
+        ? `Mari ikut mendukung program "${program.title}".`
+        : 'Mari ikut mendukung program kebaikan ini.',
+      '',
+      affiliateUrl,
+    ].join('\n');
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
+      '_blank'
+    );
+  };
+
+  // ========================================================
+  // WITHDRAWAL REQUEST
+  // ========================================================
+
+  const handleWithdrawal = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (!stats) return;
+
+    const amount = Number(
+      withdrawAmount.replace(/[^0-9]/g, '')
+    );
+
+    setWithdrawMessage('');
+    setWithdrawError('');
+
+    if (!amount || amount <= 0) {
+      setWithdrawError(
+        'Masukkan nominal penarikan yang benar.'
+      );
+      return;
+    }
+
+    const minimum =
+      Number(stats.withdrawalConfig?.minimum || 0);
+
+    const maximum =
+      Number(stats.withdrawalConfig?.maximum || 0);
+
+    if (minimum > 0 && amount < minimum) {
+      setWithdrawError(
+        `Minimal penarikan adalah ${rupiah(minimum)}.`
+      );
+      return;
+    }
+
+    if (maximum > 0 && amount > maximum) {
+      setWithdrawError(
+        `Maksimal penarikan adalah ${rupiah(maximum)}.`
+      );
+      return;
+    }
+
+    if (amount > availableCommission) {
+      setWithdrawError(
+        'Nominal penarikan melebihi saldo komisi tersedia.'
+      );
+      return;
+    }
+
+    setWithdrawing(true);
+
+    try {
+      const res = await fetch('/api/fundraiser/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: cleanPhoneNumber(phone),
+          amount,
+          note: withdrawNote.trim(),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setWithdrawError(
+          json.message ||
+            'Pengajuan penarikan tidak berhasil.'
+        );
+        return;
+      }
+
+      setWithdrawMessage(
+        json.message ||
+          'Pengajuan penarikan berhasil dikirim.'
+      );
+
+      setWithdrawAmount('');
+      setWithdrawNote('');
+
+      await loadStats(phone);
+    } catch (err) {
+      console.error(err);
+
+      setWithdrawError(
+        'Terjadi gangguan saat mengirim pengajuan penarikan.'
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  // ========================================================
+  // RENDER
+  // ========================================================
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 flex flex-col items-center">
-      <div className="w-full max-w-md bg-white border border-gray-200 p-6 shadow-sm rounded-none text-left space-y-5">
-        
-        <div className="text-center space-y-1 border-b border-gray-100 pb-4">
-          <h1 className="text-sm font-black text-gray-800 uppercase tracking-widest">Performa Afiliasi</h1>
-          <p className="text-[10px] font-medium text-gray-400">Cek total perolehan dana dari link fundraiser Anda</p>
-        </div>
+    <main className="min-h-screen bg-[#f7f8fa] px-4 py-8 md:py-12">
+      <div className="mx-auto w-full max-w-5xl">
 
-        {/* Form Pengecekan */}
-        <form onSubmit={handleCheckStats} className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nomor WhatsApp Anda</label>
-            <input 
-              type="tel"
-              required
-              placeholder="Contoh: 08123456789"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-none text-xs font-bold focus:outline-none focus:border-emerald-600 focus:bg-white"
-            />
-          </div>
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-bold py-2.5 text-xs uppercase tracking-widest rounded-none transition"
-          >
-            {loading ? 'Memuat Data...' : 'Lihat Total Pendapatan ➔'}
-          </button>
-        </form>
+        {/* ==================================================
+            HEADER
+        ================================================== */}
 
-        {error && <p className="text-center text-xs font-bold text-red-600 bg-red-50 py-2 border border-dashed border-red-200">{error}</p>}
+        <div className="mb-5 border border-gray-200 bg-white px-5 py-5 md:px-7">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
-        {/* Hasil Tampilan Statistik Perolehan */}
-        {stats && (
-          <div className="space-y-4 pt-2 border-t border-gray-100">
-            <div className="bg-gray-50/70 border border-gray-200/60 p-4 space-y-3 rounded-none">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Nama Relawan</span>
-                <span className="text-xs font-black text-gray-700">{stats.profile.name}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Status Akun</span>
-                <span className={`text-[9px] font-bold px-2 py-0.5 uppercase rounded-none tracking-wide text-white ${stats.profile.status === 'approved' ? 'bg-emerald-600' : 'bg-amber-500'}`}>
-                  {stats.profile.status === 'approved' ? 'Aktif Verifikasi' : 'Pending Approval'}
-                </span>
-              </div>
-              
-              <div className="border-t border-gray-200/60 my-2 pt-2 flex justify-between items-baseline">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Total Dana Dihimpun</span>
-                <span className="text-lg font-black text-emerald-600">Rp {stats.totalEarnings.toLocaleString('id-ID')}</span>
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <CircleDollarSign
+                  size={20}
+                  className="text-emerald-600"
+                />
+
+                <h1 className="text-lg font-black tracking-tight text-gray-900 md:text-xl">
+                  Dashboard Fundraiser
+                </h1>
               </div>
 
-              {/* Rincian Alokasi Perolehan */}
-              <div className="border-t border-dashed border-gray-200 pt-2 space-y-1.5">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Total Ujrah Hak Anda (10%)</span>
-                  <span className="text-xs font-bold text-gray-600">Rp {Math.round(stats.totalEarnings * 0.1).toLocaleString('id-ID')}</span>
-                </div>
-                
-                <div className="flex justify-between items-baseline">
-                  <span className="text-[10px] font-bold text-amber-600 uppercase">Fee Sudah Dibayarkan Yayasan</span>
-                  <span className="text-xs font-bold text-amber-700">-Rp {(stats.profile.feePaid || 0).toLocaleString('id-ID')}</span>
-                </div>
-
-                <div className="flex justify-between items-baseline border-b border-gray-200/60 pb-2 mb-2">
-                  <span className="text-[10px] font-black text-purple-600 uppercase">Sisa Saldo Fee Tersedia</span>
-                  <span className="text-sm font-black text-purple-700">
-                    Rp {Math.max(0, Math.round(stats.totalEarnings * 0.1) - (stats.profile.feePaid || 0)).toLocaleString('id-ID')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
-                <span>Jumlah Donatur</span>
-                <span>{stats.donationCount} Transaksi Sukses</span>
-              </div>
-            </div>
-
-            {/* ===================================================================
-                🚀 AKSI TAUTAN MULTI-PROGRAM: Model Dropdown Lebih Ringkas & Rapi
-               =================================================================== */}
-            <div className="mt-4 pt-2 text-left space-y-3">
-              <label className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">
-                🔗 Pilih & Salin Tautan Afiliasi Program Anda
-              </label>
-              
-              {stats.programs && stats.programs.length > 0 ? (
-                <div className="space-y-3">
-                  {/* Dropdown Menu untuk Memilih Program Donasi */}
-                  <select
-                    value={selectedSlug}
-                    onChange={(e) => {
-                      setSelectedSlug(e.target.value);
-                      setCopied(false);
-                    }}
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-none text-xs font-bold focus:outline-none focus:border-purple-600 focus:bg-white text-gray-700"
-                  >
-                    <option value="">-- Pilih Program Donasi --</option>
-                    {stats.programs.map((prog: any, index: number) => (
-                      <option key={index} value={prog.slug}>
-                        {prog.title}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Tautan Generator Otomatis yang Muncul Berdasarkan Opsi yang Dipilih */}
-                  {selectedSlug && (() => {
-                    const cleanPhone = phone.replace(/[^0-9]/g, '');
-                    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-                    const affiliateUrl = `${baseUrl}/campaign/${selectedSlug}?ref=${cleanPhone}`;
-                    
-                    return (
-                      <div className="border border-gray-200 bg-gray-50/30 p-2.5 space-y-2 transition-all">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Tautan Siap Disebar:</span>
-                          <button 
-                            type="button"
-                            onClick={() => handleCopy(affiliateUrl)}
-                            className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 transition-all text-white ${copied ? 'bg-emerald-600' : 'bg-purple-600 hover:bg-purple-700'}`}
-                          >
-                            {copied ? 'Tersalin' : 'Salin'}
-                          </button>
-                        </div>
-                        <div className="bg-white border border-gray-200 px-2 py-1.5 text-[9px] font-mono text-gray-500 truncate select-all">
-                          {affiliateUrl}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                // Fallback otomatis jika data array program dinamis gagal termuat
-                <div className="flex rounded-none overflow-hidden border border-gray-300">
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/campaign/${stats.profile.programSlug}?ref=${phone.replace(/[^0-9]/g, '')}`}
-                    className="flex-1 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-600 focus:outline-none"
-                    id="affiliate-link-input-fallback"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const inputEl = document.getElementById('affiliate-link-input-fallback') as HTMLInputElement;
-                      if (inputEl) {
-                        navigator.clipboard.writeText(inputEl.value);
-                        alert('Tautan dasar berhasil disalin!');
-                      }
-                    }}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 text-xs uppercase tracking-wider transition"
-                  >
-                    Salin
-                  </button>
-                </div>
-              )}
-              
-              <p className="text-[9px] text-gray-400 font-medium leading-relaxed">
-                *Silakan pilih program donasi melalui menu drop-down di atas, lalu klik tombol salin untuk menyebarkan link afiliasi unik milik Anda.
+              <p className="text-xs leading-relaxed text-gray-500">
+                Pantau donasi, komisi, link referral dan
+                riwayat pencairan dalam satu halaman.
               </p>
             </div>
 
-            {/* ===================================================================
-                🚀 FIXED: RIWAYAT TRANSAKSI DENGAN DETAIL NAMA PROGRAM DONASI
-               =================================================================== */}
-            <div className="space-y-2 border-t border-gray-100 pt-3">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Riwayat Dukungan Transaksi</h3>
-              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
-                {stats.history && stats.history.length > 0 ? (
-                  stats.history.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center p-2.5 bg-white border border-gray-100 text-xs shadow-xs gap-3">
-                      <div className="flex-1 min-w-0 text-left">
-                        {/* Nama Donatur */}
-                        <span className="font-bold text-gray-700 block truncate">{item.donorName}</span>
-                        {/* Keterangan Asal Program Donasi */}
-                        <span className="text-[9px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 inline-block truncate max-w-full mt-0.5">
-                          Program: {item.programTitle || 'Sedekah Umum / Non-Slug'}
-                        </span>
-                      </div>
-                      {/* Nominal Dana Sukses */}
-                      <span className="font-black text-emerald-600 font-mono text-right whitespace-nowrap">
-                        +Rp {Number(item.amount).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-[11px] text-gray-400 italic py-2 text-center">Belum ada donasi masuk dari link Anda.</p>
-                )}
-              </div>
+            {stats && (
+              <button
+                type="button"
+                onClick={() => loadStats(phone)}
+                disabled={loading}
+                className="flex h-10 items-center justify-center gap-2 border border-gray-200 bg-white px-4 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={14}
+                  className={
+                    loading ? 'animate-spin' : ''
+                  }
+                />
+                Refresh
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ==================================================
+            SEARCH
+        ================================================== */}
+
+        <div className="mb-5 border border-gray-200 bg-white p-5 md:p-6">
+          <form
+            onSubmit={handleCheckStats}
+            className="flex flex-col gap-3 md:flex-row md:items-end"
+          >
+            <div className="flex-1">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">
+                Nomor WhatsApp Fundraiser
+              </label>
+
+              <input
+                type="tel"
+                required
+                placeholder="Contoh: 08123456789"
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value)
+                }
+                className="h-11 w-full border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:bg-white"
+              />
             </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex h-11 items-center justify-center gap-2 bg-emerald-600 px-6 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-700 disabled:bg-gray-300"
+            >
+              {loading ? (
+                <>
+                  <LoaderCircle
+                    size={15}
+                    className="animate-spin"
+                  />
+                  Memuat
+                </>
+              ) : (
+                <>
+                  Lihat Dashboard
+                  <ArrowUpRight size={15} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {error && (
+            <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {stats && (
+          <div className="space-y-5">
+
+            {/* ==================================================
+                PROFILE
+            ================================================== */}
+
+            <section className="border border-gray-200 bg-white p-5 md:p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+                <div>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    Fundraiser
+                  </p>
+
+                  <h2 className="text-lg font-black text-gray-900">
+                    {stats.profile.name}
+                  </h2>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    {cleanPhoneNumber(phone)}
+                  </p>
+                </div>
+
+                <div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${
+                      stats.profile.status === 'approved'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    <ShieldCheck size={13} />
+
+                    {stats.profile.status === 'approved'
+                      ? 'Akun Terverifikasi'
+                      : 'Menunggu Verifikasi'}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            {/* ==================================================
+                SUMMARY
+            ================================================== */}
+
+            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+              <StatCard
+                icon={<HandCoins size={19} />}
+                label="Dana Dihimpun"
+                value={rupiah(totalDonation)}
+                description={`${stats.donationCount || 0} donasi sukses`}
+              />
+
+              <StatCard
+                icon={<CircleDollarSign size={19} />}
+                label="Total Komisi"
+                value={rupiah(totalCommission)}
+                description={`${Math.round(
+                  commissionRate * 100
+                )}% dari donasi`}
+              />
+
+              <StatCard
+                icon={<Banknote size={19} />}
+                label="Sudah Dicairkan"
+                value={rupiah(totalWithdrawn)}
+                description="Komisi telah dibayarkan"
+              />
+
+              <StatCard
+                icon={<WalletCards size={19} />}
+                label="Saldo Tersedia"
+                value={rupiah(availableCommission)}
+                description={
+                  pendingWithdrawal > 0
+                    ? `${rupiah(
+                        pendingWithdrawal
+                      )} sedang diproses`
+                    : 'Siap diajukan'
+                }
+                highlight
+              />
+            </section>
+
+            {/* ==================================================
+                WITHDRAWAL ACTION
+            ================================================== */}
+
+            <section className="border border-gray-200 bg-white">
+              <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Landmark
+                      size={18}
+                      className="text-purple-600"
+                    />
+
+                    <h3 className="text-sm font-black text-gray-900">
+                      Pencairan Komisi
+                    </h3>
+                  </div>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Saldo yang dapat ditarik saat ini{' '}
+                    <strong className="text-purple-700">
+                      {rupiah(availableCommission)}
+                    </strong>
+                  </p>
+
+                  {pendingWithdrawal > 0 && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-600">
+                      {rupiah(pendingWithdrawal)} sedang
+                      menunggu proses pencairan.
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={
+                    availableCommission <= 0 ||
+                    stats.withdrawalConfig?.enabled ===
+                      false
+                  }
+                  onClick={() =>
+                    setShowWithdrawal((prev) => !prev)
+                  }
+                  className="h-10 bg-purple-600 px-5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  Ajukan Penarikan
+                </button>
+              </div>
+
+              {showWithdrawal && (
+                <form
+                  onSubmit={handleWithdrawal}
+                  className="border-t border-gray-100 bg-gray-50 p-5 md:p-6"
+                >
+                  <div className="grid gap-4 md:grid-cols-2">
+
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-wider text-gray-500">
+                        Nominal Penarikan
+                      </label>
+
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Contoh: 100000"
+                        value={withdrawAmount}
+                        onChange={(e) =>
+                          setWithdrawAmount(
+                            e.target.value.replace(
+                              /[^0-9]/g,
+                              ''
+                            )
+                          )
+                        }
+                        className="h-11 w-full border border-gray-200 bg-white px-4 text-sm font-bold text-gray-800 outline-none focus:border-purple-500"
+                      />
+
+                      {Number(
+                        stats.withdrawalConfig?.minimum ||
+                          0
+                      ) > 0 && (
+                        <p className="mt-1.5 text-[10px] text-gray-400">
+                          Minimal penarikan{' '}
+                          {rupiah(
+                            stats.withdrawalConfig
+                              ?.minimum
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-wider text-gray-500">
+                        Catatan
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="Opsional"
+                        value={withdrawNote}
+                        onChange={(e) =>
+                          setWithdrawNote(
+                            e.target.value
+                          )
+                        }
+                        className="h-11 w-full border border-gray-200 bg-white px-4 text-sm text-gray-800 outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  {(stats.profile.bankName ||
+                    stats.profile.accountNumber) && (
+                    <div className="mt-4 border border-gray-200 bg-white p-4">
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                        Rekening Pencairan
+                      </p>
+
+                      <p className="text-xs font-bold text-gray-800">
+                        {stats.profile.bankName || '-'}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {stats.profile.accountNumber ||
+                          '-'}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        a.n.{' '}
+                        {stats.profile.accountName ||
+                          stats.profile.name}
+                      </p>
+                    </div>
+                  )}
+
+                  {withdrawError && (
+                    <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                      {withdrawError}
+                    </div>
+                  )}
+
+                  {withdrawMessage && (
+                    <div className="mt-4 border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+                      {withdrawMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="submit"
+                      disabled={
+                        withdrawing ||
+                        availableCommission <= 0
+                      }
+                      className="flex h-10 items-center justify-center gap-2 bg-purple-600 px-5 text-xs font-black uppercase tracking-wider text-white hover:bg-purple-700 disabled:bg-gray-300"
+                    >
+                      {withdrawing ? (
+                        <>
+                          <LoaderCircle
+                            size={14}
+                            className="animate-spin"
+                          />
+                          Mengirim
+                        </>
+                      ) : (
+                        <>
+                          <Banknote size={14} />
+                          Kirim Pengajuan
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowWithdrawal(false)
+                      }
+                      className="h-10 border border-gray-200 bg-white px-5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
+
+            {/* ==================================================
+                AFFILIATE LINK
+            ================================================== */}
+
+            <section className="border border-gray-200 bg-white p-5 md:p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <Link2
+                  size={18}
+                  className="text-purple-600"
+                />
+
+                <div>
+                  <h3 className="text-sm font-black text-gray-900">
+                    Link Fundraiser
+                  </h3>
+
+                  <p className="text-[11px] text-gray-500">
+                    Pilih program yang ingin Anda bagikan.
+                  </p>
+                </div>
+              </div>
+
+              {stats.programs &&
+              stats.programs.length > 0 ? (
+                <>
+                  <select
+                    value={selectedSlug}
+                    onChange={(e) => {
+                      setSelectedSlug(
+                        e.target.value
+                      );
+                      setCopied(false);
+                    }}
+                    className="h-11 w-full border border-gray-200 bg-gray-50 px-3 text-xs font-bold text-gray-700 outline-none focus:border-purple-500 focus:bg-white"
+                  >
+                    <option value="">
+                      -- Pilih Program Donasi --
+                    </option>
+
+                    {stats.programs.map(
+                      (program, index) => (
+                        <option
+                          key={`${program.slug}-${index}`}
+                          value={program.slug}
+                        >
+                          {program.title}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  {affiliateUrl && (
+                    <div className="mt-3 border border-gray-200 bg-gray-50 p-3">
+                      <p className="mb-2 break-all font-mono text-[10px] leading-relaxed text-gray-500">
+                        {affiliateUrl}
+                      </p>
+
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleCopy}
+                          className="flex h-9 items-center justify-center gap-2 bg-gray-900 px-4 text-[10px] font-black uppercase tracking-wider text-white"
+                        >
+                          {copied ? (
+                            <Check size={13} />
+                          ) : (
+                            <Copy size={13} />
+                          )}
+
+                          {copied
+                            ? 'Tersalin'
+                            : 'Salin Link'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={
+                            handleShareWhatsApp
+                          }
+                          className="flex h-9 items-center justify-center gap-2 bg-emerald-600 px-4 text-[10px] font-black uppercase tracking-wider text-white"
+                        >
+                          <Share2 size={13} />
+                          Bagikan WhatsApp
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  Belum ada program yang tersedia.
+                </p>
+              )}
+            </section>
+
+            {/* ==================================================
+                HISTORY
+            ================================================== */}
+
+            <section className="border border-gray-200 bg-white">
+
+              {/* TABS */}
+
+              <div className="grid grid-cols-2 border-b border-gray-200">
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTab('donations')
+                  }
+                  className={`flex items-center justify-center gap-2 px-3 py-4 text-[10px] font-black uppercase tracking-wider transition ${
+                    activeTab === 'donations'
+                      ? 'border-b-2 border-emerald-600 bg-emerald-50/40 text-emerald-700'
+                      : 'text-gray-400 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users size={14} />
+                  Riwayat Donasi
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTab('withdrawals')
+                  }
+                  className={`flex items-center justify-center gap-2 px-3 py-4 text-[10px] font-black uppercase tracking-wider transition ${
+                    activeTab === 'withdrawals'
+                      ? 'border-b-2 border-purple-600 bg-purple-50/40 text-purple-700'
+                      : 'text-gray-400 hover:bg-gray-50'
+                  }`}
+                >
+                  <History size={14} />
+                  Riwayat Penarikan
+
+                  {withdrawals.length > 0 && (
+                    <span className="bg-purple-100 px-1.5 py-0.5 text-[9px] text-purple-700">
+                      {withdrawals.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* DONATION HISTORY */}
+
+              {activeTab === 'donations' && (
+                <div className="divide-y divide-gray-100">
+                  {stats.history &&
+                  stats.history.length > 0 ? (
+                    stats.history.map(
+                      (item, index) => (
+                        <div
+                          key={
+                            item._id ||
+                            `donation-${index}`
+                          }
+                          className="flex items-center justify-between gap-4 px-4 py-4 md:px-6"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black text-gray-800">
+                              {item.donorName ||
+                                'Hamba Allah'}
+                            </p>
+
+                            <p className="mt-1 truncate text-[10px] font-semibold text-purple-600">
+                              {item.programTitle ||
+                                'Sedekah Umum'}
+                            </p>
+
+                            {(item.createdAt ||
+                              item.paidAt) && (
+                              <p className="mt-1 text-[9px] text-gray-400">
+                                {formatDate(
+                                  item.paidAt ||
+                                    item.createdAt
+                                )}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="text-right">
+                            <p className="whitespace-nowrap text-xs font-black text-emerald-600">
+                              +{rupiah(item.amount)}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <EmptyState
+                      icon={
+                        <HandCoins size={25} />
+                      }
+                      title="Belum Ada Donasi"
+                      description="Donasi melalui link fundraiser akan muncul di sini."
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* WITHDRAWAL HISTORY */}
+
+              {activeTab === 'withdrawals' && (
+                <div className="divide-y divide-gray-100">
+                  {withdrawals.length > 0 ? (
+                    withdrawals.map(
+                      (item, index) => {
+                        const status =
+                          getWithdrawalStatus(
+                            item.status
+                          );
+
+                        const StatusIcon =
+                          status.icon;
+
+                        return (
+                          <div
+                            key={
+                              item._id ||
+                              `withdrawal-${index}`
+                            }
+                            className="p-4 md:p-6"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                              <div>
+                                <p className="text-base font-black text-gray-900">
+                                  {rupiah(
+                                    item.amount
+                                  )}
+                                </p>
+
+                                <p className="mt-1 text-[10px] text-gray-400">
+                                  Diajukan{' '}
+                                  {formatDate(
+                                    item.requestedAt
+                                  )}
+                                </p>
+                              </div>
+
+                              <span
+                                className={`inline-flex w-fit items-center gap-1.5 border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide ${status.className}`}
+                              >
+                                <StatusIcon
+                                  size={12}
+                                />
+
+                                {status.label}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-2 border-t border-gray-100 pt-3 text-[10px] sm:grid-cols-2">
+
+                              {(item.bankName ||
+                                item.accountNumber) && (
+                                <div>
+                                  <span className="block text-gray-400">
+                                    Rekening
+                                  </span>
+
+                                  <span className="font-bold text-gray-700">
+                                    {item.bankName ||
+                                      '-'}{' '}
+                                    {item.accountNumber ||
+                                      ''}
+                                  </span>
+                                </div>
+                              )}
+
+                              {item.paidAt && (
+                                <div>
+                                  <span className="block text-gray-400">
+                                    Dibayarkan
+                                  </span>
+
+                                  <span className="font-bold text-gray-700">
+                                    {formatDate(
+                                      item.paidAt
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+
+                              {item.referenceNumber && (
+                                <div>
+                                  <span className="block text-gray-400">
+                                    Nomor Referensi
+                                  </span>
+
+                                  <span className="font-mono font-bold text-gray-700">
+                                    {
+                                      item.referenceNumber
+                                    }
+                                  </span>
+                                </div>
+                              )}
+
+                              {item.note && (
+                                <div>
+                                  <span className="block text-gray-400">
+                                    Catatan Fundraiser
+                                  </span>
+
+                                  <span className="font-medium text-gray-700">
+                                    {item.note}
+                                  </span>
+                                </div>
+                              )}
+
+                              {item.adminNote && (
+                                <div className="sm:col-span-2">
+                                  <span className="block text-gray-400">
+                                    Keterangan Admin
+                                  </span>
+
+                                  <span className="font-medium text-gray-700">
+                                    {item.adminNote}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                    )
+                  ) : (
+                    <EmptyState
+                      icon={<Landmark size={25} />}
+                      title="Belum Ada Penarikan"
+                      description="Riwayat pengajuan dan pembayaran komisi fundraiser akan muncul di sini."
+                    />
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         )}
-
       </div>
+    </main>
+  );
+}
+
+// ==========================================================
+// STAT CARD
+// ==========================================================
+
+function StatCard({
+  icon,
+  label,
+  value,
+  description,
+  highlight = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  description: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`border p-4 md:p-5 ${
+        highlight
+          ? 'border-purple-200 bg-purple-50/50'
+          : 'border-gray-200 bg-white'
+      }`}
+    >
+      <div
+        className={`mb-4 flex h-8 w-8 items-center justify-center ${
+          highlight
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-gray-100 text-gray-600'
+        }`}
+      >
+        {icon}
+      </div>
+
+      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+        {label}
+      </p>
+
+      <p
+        className={`mt-1 break-words text-sm font-black md:text-base ${
+          highlight
+            ? 'text-purple-700'
+            : 'text-gray-900'
+        }`}
+      >
+        {value}
+      </p>
+
+      <p className="mt-1 text-[9px] leading-relaxed text-gray-400">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+// ==========================================================
+// EMPTY STATE
+// ==========================================================
+
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center bg-gray-100 text-gray-400">
+        {icon}
+      </div>
+
+      <p className="text-xs font-black text-gray-700">
+        {title}
+      </p>
+
+      <p className="mt-1 max-w-xs text-[10px] leading-relaxed text-gray-400">
+        {description}
+      </p>
     </div>
   );
 }
