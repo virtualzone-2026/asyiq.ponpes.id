@@ -81,7 +81,7 @@ export default function Footer() {
               </li>
               <li>
                 <span className="font-bold text-gray-700 block">WhatsApp:</span>
-                <a href="https://wa.me/6281225147373" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600 font-semibold transition-colors">
+                <a href="https://wa.me/6285328813960" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600 font-semibold transition-colors">
                   0812-2514-7373
                 </a>
               </li>
