@@ -12,9 +12,7 @@ import { createClient } from 'next-sanity';
 // =========================================================
 
 const SITE_NAME = 'asyiq.ponpes.id';
-
 const SITE_URL = 'https://asyiq.ponpes.id';
-
 const PONDOK_NAME = "Pondok Pesantren 'Aasyiqul Qur'an";
 
 // =========================================================
@@ -31,7 +29,6 @@ const sanityClient = createClient({
     'production',
 
   apiVersion: '2026-06-20',
-
   useCdn: false,
 });
 
@@ -43,7 +40,7 @@ export const metadata: Metadata = {
   title: `Peta Situs | ${SITE_NAME}`,
 
   description:
-    `Peta situs resmi ${SITE_NAME} untuk memudahkan akses ke halaman utama, program donasi, profil ${PONDOK_NAME}, informasi kontak, berita, kegiatan, dan program kebaikan.`,
+    `Peta situs resmi ${SITE_NAME} untuk memudahkan akses ke halaman utama, program donasi, profil ${PONDOK_NAME}, kontak, berita, kegiatan, dan berbagai program kebaikan.`,
 
   keywords: [
     'peta situs asyiq ponpes',
@@ -80,11 +77,8 @@ export const metadata: Metadata = {
       `Akses seluruh halaman, program kebaikan, berita, dan informasi ${PONDOK_NAME} melalui peta situs resmi ${SITE_NAME}.`,
 
     url: `${SITE_URL}/peta-situs`,
-
     siteName: SITE_NAME,
-
     locale: 'id_ID',
-
     type: 'website',
   },
 };
@@ -152,38 +146,33 @@ export default async function PetaSitusPage() {
   }
 
   // =======================================================
-  // HALAMAN STATIS WEBSITE
+  // HALAMAN STATIS
   // =======================================================
 
   const halamanInti = [
     {
       title: 'Beranda',
-      description:
-        'Halaman utama website pesantren',
+      description: 'Halaman utama website pesantren',
       url: '/',
     },
     {
       title: 'Program Donasi',
-      description:
-        'Seluruh program donasi dan kebaikan',
+      description: 'Seluruh program donasi dan kebaikan',
       url: '/program',
     },
     {
       title: 'Tentang Kami',
-      description:
-        'Profil Pondok Pesantren',
+      description: 'Profil Pondok Pesantren',
       url: '/tentang-kami',
     },
     {
       title: 'Hubungi Kami',
-      description:
-        'Alamat dan layanan informasi',
+      description: 'Alamat dan layanan informasi',
       url: '/kontak',
     },
     {
       title: 'Peta Situs',
-      description:
-        'Daftar seluruh halaman website',
+      description: 'Daftar seluruh halaman website',
       url: '/peta-situs',
     },
   ];
@@ -191,186 +180,218 @@ export default async function PetaSitusPage() {
   return (
     <main className="min-h-screen bg-white">
       {/* =====================================================
-          HEADER
+          HERO / HEADER
+          DIKUNCI MAX-W-5XL SUPAYA SEJAJAR FOOTER
       ===================================================== */}
 
       <section
         className="
-          relative
-          overflow-hidden
-
-          bg-gradient-to-br
-          from-[#062d21]
-          via-[#073b2a]
-          to-[#041d16]
+          w-full
+          bg-white
 
           px-4
-          py-14
-          sm:py-16
+          sm:px-6
 
-          text-white
+          pt-6
+          md:pt-8
         "
       >
-        {/* Pattern */}
-        <div
-          className="
-            pointer-events-none
-            absolute
-            inset-0
-
-            opacity-[0.05]
-
-            bg-[radial-gradient(#fff_1px,transparent_1px)]
-            [background-size:18px_18px]
-          "
-        />
-
-        {/* Glow kiri */}
-        <div
-          className="
-            pointer-events-none
-            absolute
-
-            -left-20
-            top-1/2
-
-            h-72
-            w-72
-
-            -translate-y-1/2
-
-            rounded-full
-
-            bg-emerald-400/10
-
-            blur-[100px]
-          "
-        />
-
-        {/* Glow kanan */}
-        <div
-          className="
-            pointer-events-none
-            absolute
-
-            -right-20
-            top-0
-
-            h-72
-            w-72
-
-            rounded-full
-
-            bg-teal-300/10
-
-            blur-[100px]
-          "
-        />
-
         <div
           className="
             relative
-            z-10
+            isolate
+            overflow-hidden
 
             mx-auto
-            max-w-3xl
+            w-full
+            max-w-5xl
 
-            text-center
+            rounded-2xl
+            md:rounded-[24px]
+
+            bg-gradient-to-br
+            from-[#062d21]
+            via-[#073b2a]
+            to-[#041d16]
+
+            px-5
+            py-12
+
+            sm:px-8
+            sm:py-14
+
+            md:px-10
+            md:py-16
+
+            text-white
+
+            shadow-[0_18px_50px_rgba(15,23,42,0.08)]
           "
         >
-          {/* Badge */}
+          {/* Pattern */}
           <div
             className="
-              mb-5
+              pointer-events-none
+              absolute
+              inset-0
+              -z-10
 
-              inline-flex
-              items-center
-              gap-2
+              opacity-[0.045]
+
+              bg-[radial-gradient(#ffffff_1px,transparent_1px)]
+              [background-size:18px_18px]
+            "
+          />
+
+          {/* Glow kiri */}
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -z-10
+
+              -left-24
+              top-1/2
+
+              h-72
+              w-72
+
+              -translate-y-1/2
 
               rounded-full
 
-              border
-              border-emerald-300/20
+              bg-emerald-400/10
 
-              bg-white/[0.07]
+              blur-[100px]
+            "
+          />
 
-              px-4
-              py-2
+          {/* Glow kanan */}
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -z-10
 
-              backdrop-blur-xl
+              -right-24
+              -top-20
+
+              h-72
+              w-72
+
+              rounded-full
+
+              bg-teal-300/10
+
+              blur-[100px]
+            "
+          />
+
+          {/* Content */}
+          <div
+            className="
+              relative
+              z-10
+
+              mx-auto
+              max-w-2xl
+
+              text-center
             "
           >
-            <span
+            <div
               className="
-                h-1.5
-                w-1.5
+                mb-5
+
+                inline-flex
+                items-center
+                gap-2
 
                 rounded-full
 
-                bg-emerald-400
+                border
+                border-emerald-300/20
 
-                shadow-[0_0_10px_rgba(52,211,153,0.8)]
+                bg-white/[0.07]
+
+                px-4
+                py-2
+
+                backdrop-blur-xl
               "
-            />
+            >
+              <span
+                className="
+                  h-1.5
+                  w-1.5
 
-            <span
+                  rounded-full
+
+                  bg-emerald-400
+
+                  shadow-[0_0_10px_rgba(52,211,153,0.8)]
+                "
+              />
+
+              <span
+                className="
+                  text-[10px]
+
+                  font-bold
+
+                  uppercase
+
+                  tracking-[0.16em]
+
+                  text-emerald-200
+                "
+              >
+                Navigasi Website
+              </span>
+            </div>
+
+            <h1
               className="
-                text-[10px]
+                text-3xl
+                sm:text-4xl
+                md:text-[42px]
 
                 font-bold
 
-                uppercase
+                tracking-[-0.035em]
 
-                tracking-[0.16em]
-
-                text-emerald-200
+                text-white
               "
             >
-              Navigasi Website
-            </span>
+              Peta Situs
+            </h1>
+
+            <p
+              className="
+                mx-auto
+                mt-4
+
+                max-w-xl
+
+                text-sm
+                md:text-[15px]
+
+                leading-7
+
+                text-white/70
+              "
+            >
+              Temukan seluruh halaman, program kebaikan,
+              berita, kegiatan, dan informasi{' '}
+              {PONDOK_NAME} melalui struktur navigasi
+              resmi {SITE_NAME}.
+            </p>
           </div>
-
-          <h1
-            className="
-              text-3xl
-              sm:text-4xl
-              md:text-[42px]
-
-              font-bold
-
-              tracking-[-0.035em]
-
-              text-white
-            "
-          >
-            Peta Situs
-          </h1>
-
-          <p
-            className="
-              mx-auto
-              mt-4
-
-              max-w-2xl
-
-              text-sm
-              md:text-[15px]
-
-              leading-7
-
-              text-white/70
-            "
-          >
-            Temukan seluruh halaman, program kebaikan,
-            berita, dan informasi{' '}
-            {PONDOK_NAME} melalui struktur navigasi
-            resmi {SITE_NAME}.
-          </p>
         </div>
       </section>
 
       {/* =====================================================
-          SITEMAP CONTENT
+          CONTENT
       ===================================================== */}
 
       <section
@@ -378,26 +399,27 @@ export default async function PetaSitusPage() {
           mx-auto
 
           w-full
-          max-w-6xl
+          max-w-5xl
 
           px-4
-          py-10
           sm:px-6
-          md:py-14
+
+          py-10
+          md:py-12
         "
       >
         {/* ===================================================
-            INFO
+            HEADER DIREKTORI
         =================================================== */}
 
         <div
           className="
-            mb-8
+            mb-7
 
             flex
             flex-col
 
-            gap-3
+            gap-4
 
             border-b
             border-gray-100
@@ -447,7 +469,7 @@ export default async function PetaSitusPage() {
               className="
                 mt-2
 
-                max-w-2xl
+                max-w-xl
 
                 text-xs
                 md:text-[13px]
@@ -457,9 +479,8 @@ export default async function PetaSitusPage() {
                 text-gray-500
               "
             >
-              Peta situs HTML ini membantu pengunjung
-              menemukan halaman dan konten yang tersedia
-              di {SITE_NAME}.
+              Peta situs ini membantu pengunjung menemukan
+              halaman dan konten yang tersedia di {SITE_NAME}.
             </p>
           </div>
 
@@ -485,14 +506,23 @@ export default async function PetaSitusPage() {
               text-emerald-700
             "
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span
+              className="
+                h-1.5
+                w-1.5
+
+                rounded-full
+
+                bg-emerald-500
+              "
+            />
 
             Diperbarui otomatis
           </div>
         </div>
 
         {/* ===================================================
-            GRID
+            GRID SITEMAP
         =================================================== */}
 
         <div
@@ -503,11 +533,11 @@ export default async function PetaSitusPage() {
             gap-5
 
             md:grid-cols-2
-            xl:grid-cols-3
+            lg:grid-cols-3
           "
         >
           {/* =================================================
-              KOLOM 1 - HALAMAN UTAMA
+              1. HALAMAN UTAMA
           ================================================= */}
 
           <div
@@ -524,7 +554,6 @@ export default async function PetaSitusPage() {
               shadow-[0_10px_35px_rgba(15,23,42,0.05)]
             "
           >
-            {/* Card Header */}
             <div
               className="
                 border-b
@@ -588,7 +617,6 @@ export default async function PetaSitusPage() {
               </div>
             </div>
 
-            {/* List */}
             <ul className="divide-y divide-gray-50">
               {halamanInti.map((item) => (
                 <li key={item.url}>
@@ -613,7 +641,7 @@ export default async function PetaSitusPage() {
                         items-start
                         justify-between
 
-                        gap-4
+                        gap-3
                       "
                     >
                       <div className="min-w-0">
@@ -674,7 +702,7 @@ export default async function PetaSitusPage() {
 
                           text-gray-300
 
-                          transition-transform
+                          transition-all
                           duration-300
 
                           group-hover:translate-x-1
@@ -691,7 +719,7 @@ export default async function PetaSitusPage() {
           </div>
 
           {/* =================================================
-              KOLOM 2 - PROGRAM
+              2. PROGRAM
           ================================================= */}
 
           <div
@@ -708,7 +736,6 @@ export default async function PetaSitusPage() {
               shadow-[0_10px_35px_rgba(15,23,42,0.05)]
             "
           >
-            {/* Header */}
             <div
               className="
                 border-b
@@ -767,6 +794,7 @@ export default async function PetaSitusPage() {
                     "
                   >
                     Program Kebaikan
+
                     <span
                       className="
                         ml-2
@@ -790,18 +818,15 @@ export default async function PetaSitusPage() {
               </div>
             </div>
 
-            {/* Programs */}
             {programs.length > 0 ? (
               <ul
                 className="
-                  max-h-[520px]
+                  max-h-[480px]
 
                   divide-y
                   divide-gray-50
 
                   overflow-y-auto
-
-                  scrollbar-thin
                 "
               >
                 {programs.map((item) => {
@@ -879,7 +904,7 @@ export default async function PetaSitusPage() {
 
                               text-gray-300
 
-                              transition-transform
+                              transition-all
                               duration-300
 
                               group-hover:translate-x-1
@@ -895,7 +920,14 @@ export default async function PetaSitusPage() {
                 })}
               </ul>
             ) : (
-              <div className="px-5 py-8 text-center">
+              <div
+                className="
+                  px-5
+                  py-10
+
+                  text-center
+                "
+              >
                 <div className="text-2xl">
                   🤲
                 </div>
@@ -916,7 +948,7 @@ export default async function PetaSitusPage() {
           </div>
 
           {/* =================================================
-              KOLOM 3 - BERITA
+              3. BERITA
           ================================================= */}
 
           <div
@@ -933,7 +965,6 @@ export default async function PetaSitusPage() {
               shadow-[0_10px_35px_rgba(15,23,42,0.05)]
             "
           >
-            {/* Header */}
             <div
               className="
                 border-b
@@ -1016,11 +1047,10 @@ export default async function PetaSitusPage() {
               </div>
             </div>
 
-            {/* News */}
             {news.length > 0 ? (
               <ul
                 className="
-                  max-h-[520px]
+                  max-h-[480px]
 
                   divide-y
                   divide-gray-50
@@ -1103,7 +1133,7 @@ export default async function PetaSitusPage() {
 
                               text-gray-300
 
-                              transition-transform
+                              transition-all
                               duration-300
 
                               group-hover:translate-x-1
@@ -1119,7 +1149,14 @@ export default async function PetaSitusPage() {
                 })}
               </ul>
             ) : (
-              <div className="px-5 py-8 text-center">
+              <div
+                className="
+                  px-5
+                  py-10
+
+                  text-center
+                "
+              >
                 <div className="text-2xl">
                   📰
                 </div>
@@ -1146,7 +1183,7 @@ export default async function PetaSitusPage() {
 
         <div
           className="
-            mt-8
+            mt-7
 
             flex
             flex-col
