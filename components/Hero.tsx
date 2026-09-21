@@ -20,20 +20,20 @@ export default function Hero() {
         bg-white
 
         px-3
-        sm:px-4
-        md:px-5
-        lg:px-6
+        sm:px-5
+        md:px-8
+        lg:px-10
 
-        pt-4
-        md:pt-5
+        pt-5
+        md:pt-6
 
-        pb-6
-        md:pb-8
+        pb-8
+        md:pb-10
       "
     >
       {/* =====================================================
-          HERO BOX
-          Lebarnya sekarang mengikuti container website
+          HERO CONTAINER
+          Lebih sempit dan mengikuti lebar konten website
       ===================================================== */}
       <div
         className="
@@ -41,21 +41,22 @@ export default function Hero() {
           isolate
 
           w-full
-          max-w-7xl
+          max-w-[1120px]
           mx-auto
 
-          min-h-[720px]
-          md:min-h-[760px]
-          lg:min-h-[780px]
+          min-h-[620px]
+          sm:min-h-[640px]
+          md:min-h-[650px]
+          lg:min-h-[660px]
 
           overflow-hidden
 
-          rounded-[24px]
-          md:rounded-[32px]
+          rounded-[20px]
+          md:rounded-[26px]
 
           bg-[#06130e]
 
-          shadow-[0_24px_70px_rgba(0,0,0,0.10)]
+          shadow-[0_18px_50px_rgba(15,23,42,0.08)]
         "
       >
         {/* =====================================================
@@ -67,24 +68,25 @@ export default function Hero() {
             alt="Pondok Pesantren Aasyiqul Qur'an"
             fill
             priority
-            sizes="(max-width: 1280px) 100vw, 1280px"
+            sizes="
+              (max-width: 640px) 100vw,
+              (max-width: 1024px) 95vw,
+              1120px
+            "
             className="
               object-cover
 
-              object-[58%_center]
+              object-[56%_center]
               sm:object-center
-              lg:object-[center_46%]
-
-              scale-[1.01]
+              lg:object-[center_48%]
             "
           />
         </div>
 
         {/* =====================================================
-            OVERLAY UTAMA
-
-            Kiri sedikit gelap untuk teks.
-            Kanan dibuat jauh lebih transparan agar foto terlihat.
+            OVERLAY HORIZONTAL
+            Gelap di kiri untuk teks,
+            sangat tipis di kanan supaya foto tetap terlihat
         ===================================================== */}
         <div
           className="
@@ -94,16 +96,15 @@ export default function Hero() {
 
             bg-gradient-to-r
 
-            from-[#02130d]/90
-            via-[#03150e]/55
-            to-[#03150e]/10
+            from-[#03140e]/90
+            via-[#03140e]/48
+            to-transparent
           "
         />
 
         {/* =====================================================
-            OVERLAY BAWAH
-
-            Lebih tipis dari sebelumnya.
+            OVERLAY VERTICAL
+            Sangat lembut
         ===================================================== */}
         <div
           className="
@@ -113,56 +114,38 @@ export default function Hero() {
 
             bg-gradient-to-b
 
-            from-black/5
+            from-black/[0.04]
             via-transparent
-            to-[#02110b]/60
+            to-[#02110b]/35
           "
         />
 
         {/* =====================================================
-            SOFT GREEN AMBIENT
+            AMBIENT GREEN
         ===================================================== */}
         <div
           className="
             absolute
             -z-10
 
-            left-[-140px]
-            top-[180px]
+            -left-32
+            top-32
 
-            w-[460px]
-            h-[460px]
+            w-[420px]
+            h-[420px]
 
             rounded-full
 
-            bg-emerald-500/[0.07]
+            bg-emerald-500/[0.06]
 
-            blur-[130px]
-
-            pointer-events-none
-          "
-        />
-
-        {/* =====================================================
-            VERY SUBTLE GRID
-        ===================================================== */}
-        <div
-          className="
-            absolute
-            inset-0
-            -z-10
-
-            opacity-[0.025]
-
-            bg-[linear-gradient(to_right,rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.4)_1px,transparent_1px)]
-            bg-[size:70px_70px]
+            blur-[120px]
 
             pointer-events-none
           "
         />
 
         {/* =====================================================
-            CONTENT WRAPPER
+            CONTENT
         ===================================================== */}
         <div
           className="
@@ -170,9 +153,11 @@ export default function Hero() {
             z-10
 
             w-full
-            min-h-[720px]
-            md:min-h-[760px]
-            lg:min-h-[780px]
+
+            min-h-[620px]
+            sm:min-h-[640px]
+            md:min-h-[650px]
+            lg:min-h-[660px]
 
             flex
             items-center
@@ -183,19 +168,18 @@ export default function Hero() {
               w-full
 
               px-5
-              sm:px-8
-              md:px-10
-              lg:px-14
-              xl:px-16
+              sm:px-7
+              md:px-9
+              lg:px-12
 
-              pt-24
-              pb-32
+              pt-16
+              pb-16
 
-              md:pt-24
-              md:pb-32
+              sm:pt-20
+              sm:pb-20
             "
           >
-            <div className="max-w-[680px]">
+            <div className="max-w-[570px]">
               {/* =================================================
                   BRAND BADGE
               ================================================= */}
@@ -203,11 +187,12 @@ export default function Hero() {
                 className="
                   inline-flex
                   items-center
+
                   gap-2.5
 
-                  mb-7
-
                   max-w-full
+
+                  mb-6
 
                   px-3
                   py-2
@@ -216,12 +201,12 @@ export default function Hero() {
 
                   bg-white/[0.10]
 
-                  backdrop-blur-xl
-
                   border
                   border-white/[0.14]
 
-                  shadow-[0_10px_35px_rgba(0,0,0,0.12)]
+                  backdrop-blur-xl
+
+                  shadow-[0_8px_25px_rgba(0,0,0,0.12)]
                 "
               >
                 <div
@@ -260,7 +245,7 @@ export default function Hero() {
 
                     bg-emerald-400
 
-                    shadow-[0_0_8px_rgba(52,211,153,.7)]
+                    shadow-[0_0_8px_rgba(52,211,153,0.7)]
                   "
                 />
 
@@ -274,7 +259,7 @@ export default function Hero() {
 
                     font-semibold
 
-                    tracking-[0.12em]
+                    tracking-[0.11em]
 
                     text-emerald-50
 
@@ -290,14 +275,14 @@ export default function Hero() {
               ================================================= */}
               <h1
                 className="
-                  text-[38px]
-                  sm:text-[46px]
-                  md:text-[54px]
-                  lg:text-[60px]
+                  text-[36px]
+                  sm:text-[42px]
+                  md:text-[48px]
+                  lg:text-[52px]
 
-                  leading-[1.02]
+                  leading-[1.04]
 
-                  tracking-[-0.045em]
+                  tracking-[-0.04em]
 
                   font-bold
 
@@ -312,9 +297,11 @@ export default function Hero() {
                   <span
                     className="
                       text-transparent
+
                       bg-clip-text
 
                       bg-gradient-to-r
+
                       from-emerald-300
                       via-emerald-400
                       to-teal-300
@@ -326,22 +313,22 @@ export default function Hero() {
               </h1>
 
               {/* =================================================
-                  SECONDARY HEADLINE
+                  SUB HEADLINE
               ================================================= */}
               <p
                 className="
                   mt-5
 
-                  max-w-[600px]
+                  max-w-[500px]
 
-                  text-[24px]
-                  sm:text-[28px]
-                  md:text-[32px]
-                  lg:text-[36px]
+                  text-[22px]
+                  sm:text-[25px]
+                  md:text-[28px]
+                  lg:text-[30px]
 
-                  leading-[1.2]
+                  leading-[1.22]
 
-                  tracking-[-0.03em]
+                  tracking-[-0.025em]
 
                   font-normal
 
@@ -356,12 +343,12 @@ export default function Hero() {
               ================================================= */}
               <p
                 className="
-                  mt-7
+                  mt-6
 
-                  max-w-[620px]
+                  max-w-[540px]
 
                   text-[13px]
-                  sm:text-sm
+                  sm:text-[14px]
                   md:text-[15px]
 
                   leading-7
@@ -371,17 +358,17 @@ export default function Hero() {
               >
                 Salurkan infak, sedekah, wakaf, dan dukungan
                 pendidikan terbaik Anda untuk membantu tumbuhnya
-                para santri dan penghafal Al-Qur&apos;an.
-                InsyaAllah setiap kebaikan menjadi bagian dari
-                amal yang terus mengalir.
+                para santri dan penghafal Al-Qur&apos;an. InsyaAllah
+                setiap kebaikan menjadi bagian dari amal yang
+                terus mengalir.
               </p>
 
               {/* =================================================
-                  CTA BUTTONS
+                  CTA
               ================================================= */}
               <div
                 className="
-                  mt-8
+                  mt-7
 
                   flex
                   flex-col
@@ -390,12 +377,11 @@ export default function Hero() {
                   gap-3
                 "
               >
-                {/* PRIMARY BUTTON */}
+                {/* PRIMARY */}
                 <Link
                   href="/program"
                   className="
                     group
-
                     relative
 
                     inline-flex
@@ -404,7 +390,7 @@ export default function Hero() {
 
                     gap-2.5
 
-                    min-h-[52px]
+                    min-h-[50px]
 
                     px-6
 
@@ -420,7 +406,7 @@ export default function Hero() {
                     text-sm
                     font-bold
 
-                    shadow-[0_14px_35px_rgba(16,185,129,.20)]
+                    shadow-[0_12px_30px_rgba(16,185,129,0.18)]
 
                     transition-all
                     duration-300
@@ -478,7 +464,7 @@ export default function Hero() {
                   />
                 </Link>
 
-                {/* SECONDARY BUTTON */}
+                {/* SECONDARY */}
                 <Link
                   href="/program"
                   className="
@@ -490,7 +476,7 @@ export default function Hero() {
 
                     gap-2.5
 
-                    min-h-[52px]
+                    min-h-[50px]
 
                     px-6
 
@@ -503,7 +489,6 @@ export default function Hero() {
 
                     border
                     border-white/[0.14]
-                    hover:border-white/25
 
                     text-white
 
@@ -533,11 +518,11 @@ export default function Hero() {
               </div>
 
               {/* =================================================
-                  TRUST
+                  TRUST INFO
               ================================================= */}
               <div
                 className="
-                  mt-8
+                  mt-7
 
                   flex
                   flex-wrap
@@ -570,10 +555,19 @@ export default function Hero() {
                       border-white/10
                     "
                   >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    <ShieldCheck
+                      className="
+                        w-3.5
+                        h-3.5
+
+                        text-emerald-300
+                      "
+                    />
                   </span>
 
-                  Aman & terpercaya
+                  <span>
+                    Aman & terpercaya
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -594,10 +588,19 @@ export default function Hero() {
                       border-white/10
                     "
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+                    <Sparkles
+                      className="
+                        w-3.5
+                        h-3.5
+
+                        text-emerald-300
+                      "
+                    />
                   </span>
 
-                  Transparan & amanah
+                  <span>
+                    Transparan & amanah
+                  </span>
                 </div>
               </div>
             </div>
@@ -606,7 +609,7 @@ export default function Hero() {
 
         {/* =====================================================
             FLOATING CARD
-            Hanya desktop besar supaya tidak menutupi gambar
+            Hanya desktop besar
         ===================================================== */}
         <div
           className="
@@ -615,25 +618,25 @@ export default function Hero() {
 
             absolute
 
-            right-8
-            bottom-20
+            right-6
+            bottom-6
 
             z-20
 
-            w-[270px]
+            w-[250px]
 
-            rounded-[22px]
+            rounded-[20px]
 
             border
-            border-white/[0.14]
+            border-white/[0.13]
 
-            bg-[#06130d]/55
+            bg-[#05140e]/55
 
             backdrop-blur-xl
 
-            p-5
+            p-4
 
-            shadow-[0_25px_60px_rgba(0,0,0,.25)]
+            shadow-[0_20px_50px_rgba(0,0,0,0.22)]
           "
         >
           <div className="flex items-center gap-3">
@@ -643,8 +646,8 @@ export default function Hero() {
                 items-center
                 justify-center
 
-                w-11
-                h-11
+                w-10
+                h-10
 
                 shrink-0
 
@@ -656,7 +659,14 @@ export default function Hero() {
                 border-emerald-300/15
               "
             >
-              <HeartHandshake className="w-5 h-5 text-emerald-300" />
+              <HeartHandshake
+                className="
+                  w-5
+                  h-5
+
+                  text-emerald-300
+                "
+              />
             </div>
 
             <div>
@@ -664,11 +674,11 @@ export default function Hero() {
                 className="
                   text-[9px]
 
-                  tracking-[0.14em]
+                  tracking-[0.12em]
 
                   uppercase
 
-                  text-white/50
+                  text-white/45
                 "
               >
                 Kebaikan Bersama
@@ -676,9 +686,9 @@ export default function Hero() {
 
               <p
                 className="
-                  mt-1
+                  mt-0.5
 
-                  text-sm
+                  text-[13px]
 
                   font-semibold
 
@@ -690,7 +700,15 @@ export default function Hero() {
             </div>
           </div>
 
-          <div className="my-4 h-px bg-white/10" />
+          <div
+            className="
+              my-3.5
+
+              h-px
+
+              bg-white/10
+            "
+          />
 
           <p
             className="
@@ -698,7 +716,7 @@ export default function Hero() {
 
               leading-5
 
-              text-white/60
+              text-white/55
             "
           >
             Setiap dukungan Anda ikut membantu pendidikan,
@@ -708,72 +726,29 @@ export default function Hero() {
         </div>
 
         {/* =====================================================
-            BOTTOM SOFT FADE
+            SOFT BOTTOM SHADE
+            Bukan gelombang, hanya gradasi tipis
         ===================================================== */}
         <div
           className="
             absolute
+
             bottom-0
             left-0
 
             z-10
 
-            h-24
             w-full
+            h-20
 
             bg-gradient-to-t
 
-            from-[#03110b]/55
+            from-[#03110b]/30
             to-transparent
 
             pointer-events-none
           "
         />
-
-        {/* =====================================================
-            BOTTOM CURVE
-        ===================================================== */}
-        <div
-          className="
-            absolute
-
-            bottom-[-1px]
-            left-0
-
-            z-20
-
-            w-full
-
-            overflow-hidden
-
-            pointer-events-none
-          "
-        >
-          <svg
-            viewBox="0 0 1440 80"
-            preserveAspectRatio="none"
-            className="
-              block
-
-              w-full
-
-              h-[28px]
-              md:h-[42px]
-            "
-          >
-            <path
-              d="
-                M0,48
-                C290,80 500,18 760,42
-                C1010,64 1230,72 1440,35
-                L1440,80
-                L0,80
-                Z
-              "
-              fill="white"
-            />
-          </svg>
-        </div>
       </div>
     </section>
   );
