@@ -4,104 +4,712 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import {
+  ArrowRight,
+  HeartHandshake,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 
 export default function Hero() {
   return (
-    // 🚀 CONTAINER UTAMA: Desain Full-Width Center yang Bersih, Megah & Futuristik
-    <section className="relative w-full min-h-[95vh] flex items-center justify-center bg-gray-950 overflow-hidden shrink-0 pb-24 pt-32 md:pt-20">
-      
-      {/* 1. Background Dokumentasi: Terang, Berwarna Asli & Tampak Jelas */}
-      <div 
-        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-45 scale-105 transition-transform duration-1000"
-        style={{ 
-          backgroundImage: "url('/images/hero-bg.png')",
-          filter: 'contrast(105%)'
-        }}
+    <section
+      className="
+        relative
+        isolate
+        w-full
+        min-h-[92vh]
+        overflow-hidden
+        bg-[#07110d]
+        flex
+        items-center
+      "
+    >
+      {/* =====================================================
+          BACKGROUND IMAGE
+      ===================================================== */}
+      <div className="absolute inset-0 -z-30">
+        <Image
+          src="/images/hero-bg.png"
+          alt="Pondok Pesantren Aasyiqul Qur'an"
+          fill
+          priority
+          sizes="100vw"
+          className="
+            object-cover
+            object-center
+            scale-[1.02]
+          "
+        />
+      </div>
+
+      {/* =====================================================
+          OVERLAY UTAMA
+          Dibuat gelap lembut agar foto tetap terlihat
+      ===================================================== */}
+      <div
+        className="
+          absolute
+          inset-0
+          -z-20
+          bg-gradient-to-r
+          from-[#06110d]/95
+          via-[#07130f]/80
+          to-[#07130f]/45
+        "
       />
 
-      {/* 2. Cyberpunk Tech Grid Layout */}
-      <div className="absolute inset-0 z-10 bg-[linear-gradient(to_right,#37415115_1px,transparent_1px),linear-gradient(to_bottom,#37415115_1px,transparent_1px)] bg-[size:4.5rem_4.5rem] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_50%,#000_75%,transparent_100%)]" />
-      
-      {/* Aurora Ambient Glow Terpusat di Belakang Teks */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[140px] z-10 animate-pulse duration-[4000ms]" />
+      {/* Overlay bawah */}
+      <div
+        className="
+          absolute
+          inset-0
+          -z-20
+          bg-gradient-to-b
+          from-black/20
+          via-transparent
+          to-[#06100c]/95
+        "
+      />
 
-      {/* 3. Overlay Gradasi Gelap Dinamis: Menjaga Kontras Tengah Namun Membiarkan Gambar Sisi Luar Menyala */}
-      <div className="absolute inset-0 z-10 bg-gradient-to-b from-gray-950/80 via-gray-950/50 to-gray-950" />
-      <div className="absolute inset-0 z-10 bg-radial-gradient from-transparent to-gray-950/40" />
+      {/* =====================================================
+          SOFT AMBIENT GLOW
+      ===================================================== */}
+      <div
+        className="
+          absolute
+          -z-10
+          top-[18%]
+          left-[8%]
+          w-[320px]
+          h-[320px]
+          md:w-[520px]
+          md:h-[520px]
+          rounded-full
+          bg-emerald-500/10
+          blur-[100px]
+          md:blur-[150px]
+          pointer-events-none
+        "
+      />
 
-      {/* 4. Konten Utama Terpusat (Max-w-5xl agar Fokus Baca Nyaman) */}
-      <div className="relative z-20 max-w-5xl mx-auto px-6 md:px-12 w-full text-center flex flex-col items-center">
-        
-        {/* Logo & Tagline Yayasan dengan Aksen Border Tech */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative w-20 h-20 md:w-24 md:h-24 mb-4 drop-shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-            <Image
-              src="/images/logo-lazisku.png"
-              alt="Logo Pondok Pesantren Aasyiqul Qur'an"
-              fill
-              className="object-contain"
-              priority
+      <div
+        className="
+          absolute
+          -z-10
+          bottom-[10%]
+          right-[5%]
+          w-[260px]
+          h-[260px]
+          md:w-[420px]
+          md:h-[420px]
+          rounded-full
+          bg-cyan-400/5
+          blur-[110px]
+          pointer-events-none
+        "
+      />
+
+      {/* =====================================================
+          GRID SANGAT HALUS
+      ===================================================== */}
+      <div
+        className="
+          absolute
+          inset-0
+          -z-10
+          opacity-[0.08]
+          bg-[linear-gradient(to_right,rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.12)_1px,transparent_1px)]
+          bg-[size:64px_64px]
+          [mask-image:linear-gradient(to_bottom,black,transparent_85%)]
+        "
+      />
+
+      {/* =====================================================
+          MAIN CONTENT
+      ===================================================== */}
+      <div
+        className="
+          relative
+          z-10
+          w-full
+          max-w-7xl
+          mx-auto
+          px-5
+          sm:px-7
+          md:px-10
+          lg:px-12
+
+          pt-28
+          pb-36
+          md:pt-32
+          md:pb-40
+        "
+      >
+        <div
+          className="
+            max-w-[760px]
+          "
+        >
+          {/* =================================================
+              BRAND BADGE
+          ================================================= */}
+          <div
+            className="
+              inline-flex
+              items-center
+              gap-3
+
+              mb-7
+
+              px-3.5
+              py-2
+
+              rounded-full
+
+              bg-white/[0.07]
+              backdrop-blur-xl
+
+              border
+              border-white/10
+
+              shadow-[0_10px_35px_rgba(0,0,0,0.18)]
+            "
+          >
+            <div
+              className="
+                relative
+                w-8
+                h-8
+
+                rounded-full
+                overflow-hidden
+
+                bg-white
+                p-1
+              "
+            >
+              <Image
+                src="/images/logo-lazisku.png"
+                alt="Logo Pondok Pesantren Aasyiqul Qur'an"
+                fill
+                sizes="32px"
+                className="object-contain p-1"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span
+                className="
+                  flex
+                  h-1.5
+                  w-1.5
+                  rounded-full
+                  bg-emerald-400
+                  shadow-[0_0_10px_rgba(52,211,153,0.8)]
+                "
+              />
+
+              <span
+                className="
+                  text-[10px]
+                  sm:text-[11px]
+                  font-semibold
+                  tracking-[0.12em]
+                  text-emerald-100
+                  uppercase
+                "
+              >
+                Pondok Pesantren &apos;Aasyiqul Qur&apos;an
+              </span>
+            </div>
+          </div>
+
+          {/* =================================================
+              HEADLINE
+          ================================================= */}
+          <h1
+            className="
+              max-w-4xl
+
+              text-[40px]
+              leading-[1.05]
+
+              sm:text-5xl
+              md:text-6xl
+              lg:text-[68px]
+
+              font-bold
+              tracking-[-0.045em]
+
+              text-white
+            "
+          >
+            Bersama Membina
+            <span className="block text-white">
+              Generasi{' '}
+              <span
+                className="
+                  text-transparent
+                  bg-clip-text
+                  bg-gradient-to-r
+                  from-emerald-300
+                  via-emerald-400
+                  to-teal-300
+                "
+              >
+                Qur&apos;ani
+              </span>
+            </span>
+
+            <span
+              className="
+                block
+                mt-2
+
+                text-[27px]
+                sm:text-[34px]
+                md:text-[42px]
+                lg:text-[46px]
+
+                leading-tight
+
+                font-medium
+
+                tracking-[-0.035em]
+
+                text-white/75
+              "
+            >
+              untuk masa depan yang penuh keberkahan.
+            </span>
+          </h1>
+
+          {/* =================================================
+              DESCRIPTION
+          ================================================= */}
+          <p
+            className="
+              mt-7
+
+              max-w-2xl
+
+              text-sm
+              sm:text-[15px]
+              md:text-[17px]
+
+              leading-7
+              md:leading-8
+
+              text-white/70
+
+              font-normal
+            "
+          >
+            Salurkan infak, sedekah, wakaf, dan dukungan pendidikan
+            terbaik Anda untuk membantu tumbuhnya para santri dan
+            penghafal Al-Qur&apos;an. InsyaAllah setiap kebaikan menjadi
+            bagian dari amal yang terus mengalir.
+          </p>
+
+          {/* =================================================
+              CTA BUTTONS
+          ================================================= */}
+          <div
+            className="
+              mt-9
+
+              flex
+              flex-col
+              sm:flex-row
+
+              sm:items-center
+
+              gap-3
+            "
+          >
+            {/* PRIMARY */}
+            <Link
+              href="/program"
+              className="
+                group
+
+                relative
+                inline-flex
+                items-center
+                justify-center
+
+                gap-2.5
+
+                min-h-[52px]
+
+                px-6
+                md:px-7
+
+                rounded-xl
+
+                bg-emerald-500
+                hover:bg-emerald-400
+
+                text-[#042a1c]
+
+                text-sm
+                font-bold
+
+                shadow-[0_15px_40px_rgba(16,185,129,0.25)]
+
+                transition-all
+                duration-300
+
+                hover:-translate-y-0.5
+                hover:shadow-[0_18px_45px_rgba(16,185,129,0.32)]
+
+                overflow-hidden
+              "
+            >
+              <span
+                className="
+                  absolute
+                  inset-0
+
+                  bg-gradient-to-r
+                  from-transparent
+                  via-white/20
+                  to-transparent
+
+                  -translate-x-[130%]
+
+                  group-hover:translate-x-[130%]
+
+                  transition-transform
+                  duration-1000
+                "
+              />
+
+              <HeartHandshake className="relative z-10 w-[18px] h-[18px]" />
+
+              <span className="relative z-10">
+                Donasi Sekarang
+              </span>
+
+              <ArrowRight
+                className="
+                  relative
+                  z-10
+
+                  w-4
+                  h-4
+
+                  transition-transform
+                  duration-300
+
+                  group-hover:translate-x-1
+                "
+              />
+            </Link>
+
+            {/* SECONDARY */}
+            <Link
+              href="/program"
+              className="
+                group
+
+                inline-flex
+                items-center
+                justify-center
+
+                gap-2
+
+                min-h-[52px]
+
+                px-6
+
+                rounded-xl
+
+                bg-white/[0.07]
+                hover:bg-white/[0.12]
+
+                backdrop-blur-xl
+
+                border
+                border-white/10
+                hover:border-white/20
+
+                text-white
+
+                text-sm
+                font-semibold
+
+                transition-all
+                duration-300
+              "
+            >
+              Lihat Program
+
+              <ArrowRight
+                className="
+                  w-4
+                  h-4
+
+                  text-white/60
+
+                  transition-transform
+                  duration-300
+
+                  group-hover:translate-x-1
+                "
+              />
+            </Link>
+          </div>
+
+          {/* =================================================
+              TRUST INFORMATION
+          ================================================= */}
+          <div
+            className="
+              mt-9
+
+              flex
+              flex-wrap
+
+              items-center
+
+              gap-x-6
+              gap-y-3
+
+              text-[11px]
+              sm:text-xs
+
+              text-white/55
+            "
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-center
+
+                  w-7
+                  h-7
+
+                  rounded-lg
+
+                  bg-emerald-400/10
+
+                  border
+                  border-emerald-400/10
+                "
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+              </div>
+
+              <span>
+                Aman & terpercaya
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-center
+
+                  w-7
+                  h-7
+
+                  rounded-lg
+
+                  bg-emerald-400/10
+
+                  border
+                  border-emerald-400/10
+                "
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+              </div>
+
+              <span>
+                Transparan & amanah
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* =====================================================
+          GLASS CARD DEKORATIF - DESKTOP
+      ===================================================== */}
+      <div
+        className="
+          hidden
+          xl:block
+
+          absolute
+
+          right-[7%]
+          bottom-[18%]
+
+          z-10
+
+          w-[300px]
+
+          rounded-[26px]
+
+          border
+          border-white/10
+
+          bg-white/[0.07]
+
+          backdrop-blur-2xl
+
+          p-5
+
+          shadow-[0_30px_80px_rgba(0,0,0,0.28)]
+        "
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="
+              flex
+              items-center
+              justify-center
+
+              w-11
+              h-11
+
+              rounded-xl
+
+              bg-emerald-400/15
+
+              border
+              border-emerald-300/10
+            "
+          >
+            <HeartHandshake
+              className="
+                w-5
+                h-5
+                text-emerald-300
+              "
             />
           </div>
-          <div className="inline-flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 px-4 py-2 rounded shadow-[0_0_20px_rgba(16,185,129,0.05)]">
-            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-            <span className="text-[10px] md:text-xs font-black tracking-widest text-emerald-400 uppercase">
-              Pondok Pesantren 'Aasyiqul Qur'an
-            </span>
+
+          <div>
+            <p
+              className="
+                text-[10px]
+                tracking-[0.15em]
+                uppercase
+                text-white/45
+              "
+            >
+              Kebaikan Bersama
+            </p>
+
+            <p
+              className="
+                mt-0.5
+                text-sm
+                font-semibold
+                text-white
+              "
+            >
+              Amal yang terus mengalir
+            </p>
           </div>
         </div>
 
-        {/* Headline Utama: Kokoh, Padat & Berkarakter */}
-        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase leading-[1.05] mb-8 max-w-4xl">
-          MEMBINA GENERASI QUR'ANI <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 drop-shadow-[0_0_25px_rgba(52,211,153,0.35)] normal-case font-medium italic inline-block mt-2 font-serif tracking-normal">
-            Menuju Keberkahan Abadi
-          </span>
-        </h1>
+        <div
+          className="
+            mt-4
+            h-px
+            w-full
+            bg-white/10
+          "
+        />
 
-        {/* Deskripsi Pendek Pendukung */}
-        <p className="text-gray-100 text-sm md:text-lg mb-12 max-w-3xl leading-relaxed tracking-wide font-normal drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-          Salurkan infak, donasi pendidikan, dan wakaf terbaik Anda secara transparan, amanah, dan instan untuk kemajuan Pondok Pesantren 'Aasyiqul Qur'an. Setiap rupiah adalah investasi amal jariyah bagi para penghafal Al-Qur'an.
-        </p>
+        <p
+          className="
+            mt-4
 
-        {/* Tombol CTA Premium Action Button */}
-        <Link
-          href="/program"
-          className="group relative inline-flex items-center justify-center gap-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-black text-xs uppercase tracking-widest px-10 py-5 rounded shadow-xl shadow-emerald-950/60 border border-emerald-400/30 overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-emerald-500/20"
+            text-xs
+
+            leading-6
+
+            text-white/55
+          "
         >
-          {/* Efek Kilatan Garis Cahaya Saat Hover */}
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
-          
-          <span className="relative z-10 flex items-center gap-2">
-            ★ Donasi & Infaq Sekarang
-          </span>
-          
-          <svg 
-            className="w-4 h-4 transition-transform duration-300 ease-out group-hover:translate-x-1 relative z-10" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="3" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </Link>
+          Setiap dukungan Anda ikut membantu pendidikan, kebutuhan
+          santri, serta pengembangan dakwah Al-Qur&apos;an.
+        </p>
       </div>
 
-      {/* 5. DEKORASI BATAS BAWAH: Potongan Kurva Putih Presisi Mulus */}
-      <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0] z-30 pointer-events-none">
-        <svg 
-          className="relative block w-full h-[45px] md:h-[75px]" 
-          viewBox="0 0 1200 120" 
+      {/* =====================================================
+          BOTTOM FADE
+      ===================================================== */}
+      <div
+        className="
+          absolute
+          bottom-0
+          left-0
+
+          z-20
+
+          w-full
+          h-28
+
+          bg-gradient-to-t
+          from-white
+          via-white/20
+          to-transparent
+
+          pointer-events-none
+        "
+      />
+
+      {/* =====================================================
+          BOTTOM CURVE
+      ===================================================== */}
+      <div
+        className="
+          absolute
+          bottom-[-1px]
+          left-0
+
+          z-30
+
+          w-full
+
+          overflow-hidden
+
+          pointer-events-none
+        "
+      >
+        <svg
+          viewBox="0 0 1440 90"
           preserveAspectRatio="none"
+          className="
+            block
+            w-full
+            h-[35px]
+            md:h-[55px]
+          "
         >
-          <path 
-            d="M0,0 C300,95 900,15 1200,65 L1200,120 L0,120 Z" 
-            className="fill-white"
+          <path
+            d="
+              M0,50
+              C280,95 470,12 760,42
+              C1010,68 1190,92 1440,34
+              L1440,90
+              L0,90
+              Z
+            "
+            fill="white"
           />
         </svg>
       </div>
-
     </section>
   );
 }
