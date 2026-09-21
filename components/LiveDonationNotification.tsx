@@ -24,6 +24,19 @@ export default function LiveDonationNotification({
   const [isVisible, setIsVisible] = useState(false);
 
   // =========================================================
+  // PENGATURAN DURASI
+  // =========================================================
+
+  // Pertama kali popup muncul
+  const INITIAL_DELAY = 8000; // 8 detik
+
+  // Berapa lama popup tampil
+  const DISPLAY_DURATION = 5000; // 5 detik
+
+  // Jeda setelah popup hilang sebelum popup berikutnya
+  const HIDDEN_DURATION = 15000; // 15 detik
+
+  // =========================================================
   // ROUTE YANG TIDAK BOLEH MENAMPILKAN POPUP
   // =========================================================
 
@@ -35,11 +48,6 @@ export default function LiveDonationNotification({
     pathname === '/admin' ||
     pathname?.startsWith('/admin/');
 
-  // 🚀 Dashboard fundraiser:
-  // /fundraiser
-  // /fundraiser/stats
-  // /fundraiser/dashboard
-  // dan seluruh sub-route fundraiser
   const isFundraiserRoute =
     pathname === '/fundraiser' ||
     pathname?.startsWith('/fundraiser/');
@@ -54,7 +62,6 @@ export default function LiveDonationNotification({
   // =========================================================
 
   useEffect(() => {
-    // Jika masuk dashboard/admin/studio, langsung sembunyikan
     if (
       shouldHideNotification ||
       !donations ||
@@ -64,45 +71,58 @@ export default function LiveDonationNotification({
       return;
     }
 
-    // Jaga index agar tidak melebihi jumlah data
+    // Pastikan index tetap valid
     setCurrentIndex((prev) =>
       prev >= donations.length ? 0 : prev
     );
 
-    let transitionTimeout: ReturnType<
-      typeof setTimeout
-    > | null = null;
+    let initialTimer: ReturnType<typeof setTimeout>;
+    let hideTimer: ReturnType<typeof setTimeout>;
+    let nextTimer: ReturnType<typeof setTimeout>;
 
-    // Popup pertama muncul setelah 2 detik
-    const initialTimeout = setTimeout(() => {
+    let cancelled = false;
+
+    // ---------------------------------------------------------
+    // Fungsi menampilkan popup
+    // ---------------------------------------------------------
+
+    const showNotification = () => {
+      if (cancelled) return;
+
       setIsVisible(true);
-    }, 2000);
 
-    // Ganti donatur setiap 8 detik
-    const displayInterval = setInterval(() => {
-      // Hilangkan popup terlebih dahulu
-      setIsVisible(false);
+      // Setelah beberapa detik, popup menghilang
+      hideTimer = setTimeout(() => {
+        if (cancelled) return;
 
-      // Setelah animasi keluar selesai, ganti data
-      transitionTimeout = setTimeout(() => {
-        setCurrentIndex(
-          (prevIndex) =>
-            (prevIndex + 1) % donations.length
-        );
+        setIsVisible(false);
 
-        setIsVisible(true);
-      }, 600);
-    }, 8000);
+        // Tunggu cukup lama sebelum popup berikutnya muncul
+        nextTimer = setTimeout(() => {
+          if (cancelled) return;
 
-    // Bersihkan seluruh timer ketika pindah halaman
-    // atau komponen di-unmount
+          // Ganti donatur saat popup sedang tidak terlihat
+          setCurrentIndex(
+            (prevIndex) =>
+              (prevIndex + 1) % donations.length
+          );
+
+          showNotification();
+        }, HIDDEN_DURATION);
+      }, DISPLAY_DURATION);
+    };
+
+    // Popup pertama jangan langsung muncul
+    initialTimer = setTimeout(() => {
+      showNotification();
+    }, INITIAL_DELAY);
+
     return () => {
-      clearTimeout(initialTimeout);
-      clearInterval(displayInterval);
+      cancelled = true;
 
-      if (transitionTimeout) {
-        clearTimeout(transitionTimeout);
-      }
+      clearTimeout(initialTimer);
+      clearTimeout(hideTimer);
+      clearTimeout(nextTimer);
     };
   }, [
     donations,
@@ -133,40 +153,100 @@ export default function LiveDonationNotification({
   // =========================================================
 
   return (
-    <div className="fixed top-20 md:top-28 left-4 right-4 md:right-auto md:left-6 z-[9999] pointer-events-none md:max-w-sm w-auto md:w-full">
+    <div
+      className="
+        fixed
+        top-20
+        md:top-24
+        left-3
+        right-3
+        md:left-5
+        md:right-auto
+        z-[9999]
+        pointer-events-none
+        md:w-[360px]
+        md:max-w-[calc(100vw-40px)]
+      "
+    >
       <div
         className={`
           w-full
-          bg-white/98
-          backdrop-blur-md
+
+          bg-white/80
+          backdrop-blur-xl
+
           border
-          border-gray-200/70
-          p-3
-          md:p-4
-          rounded-xl
-          shadow-xl
-          shadow-gray-300/30
-          transition-all
-          duration-500
-          ease-out
+          border-white/60
+
+          px-3
+          py-3
+          md:px-4
+          md:py-3.5
+
+          rounded-2xl
+
+          shadow-[0_10px_35px_rgba(15,23,42,0.12)]
+
           flex
           items-center
           gap-3
+
+          transition-all
+          duration-700
+          ease-out
+
           ${
             isVisible
-              ? 'opacity-100 translate-y-0 scale-100'
-              : 'opacity-0 -translate-y-4 scale-95'
+              ? `
+                  opacity-95
+                  translate-y-0
+                  scale-100
+                `
+              : `
+                  opacity-0
+                  -translate-y-2
+                  scale-[0.98]
+                `
           }
         `}
       >
         {/* ===================================================
-            INDIKATOR HIJAU
+            INDIKATOR DONASI
         =================================================== */}
 
-        <div className="relative flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-emerald-50 border border-emerald-100 shrink-0">
-          <span className="absolute w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+        <div
+          className="
+            relative
+            flex
+            items-center
+            justify-center
 
-          <span className="relative w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            w-9
+            h-9
+            md:w-10
+            md:h-10
+
+            rounded-full
+
+            bg-emerald-50/80
+            border
+            border-emerald-100/80
+
+            shrink-0
+          "
+        >
+          {/* Tidak memakai animate-ping agar tidak berkedip */}
+          <span
+            className="
+              w-2
+              h-2
+
+              bg-emerald-500
+              rounded-full
+
+              shadow-[0_0_10px_rgba(16,185,129,0.35)]
+            "
+          />
         </div>
 
         {/* ===================================================
@@ -174,14 +254,28 @@ export default function LiveDonationNotification({
         =================================================== */}
 
         <div className="flex flex-col text-left min-w-0">
-          <p className="text-[11px] md:text-sm text-gray-900 leading-normal md:leading-relaxed font-medium">
+          <p
+            className="
+              text-[11px]
+              md:text-[13px]
+
+              text-gray-700
+
+              leading-[1.55]
+              md:leading-[1.6]
+
+              font-normal
+            "
+          >
             Alhamdulillah,{' '}
-            <span className="text-gray-950 font-bold">
+
+            <span className="text-gray-900 font-semibold">
               {currentDonation.name}
             </span>{' '}
+
             baru saja berinfaq/donasi{' '}
 
-            <span className="text-emerald-600 font-black">
+            <span className="text-emerald-600 font-bold">
               {currentDonation.amount}
             </span>{' '}
 
@@ -191,11 +285,22 @@ export default function LiveDonationNotification({
               {currentDonation.program}
             </span>{' '}
 
-            di Pondok Pesantren &apos;Aasyiqul
-            Qur&apos;an
+            di Pondok Pesantren &apos;Aasyiqul Qur&apos;an
           </p>
 
-          <span className="text-[9px] md:text-[10px] text-gray-400 tracking-wide mt-0.5 block italic">
+          <span
+            className="
+              text-[9px]
+              md:text-[10px]
+
+              text-gray-400
+
+              mt-1
+
+              block
+              italic
+            "
+          >
             🕒 {currentDonation.timeLabel}
           </span>
         </div>
