@@ -9,11 +9,13 @@ import {
   CircleDollarSign,
   Clock3,
   Copy,
+  Eye,
   HandCoins,
   History,
   Landmark,
   Link2,
   LoaderCircle,
+  Percent,
   RefreshCw,
   Share2,
   ShieldCheck,
@@ -22,6 +24,13 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+
+// ==========================================================
+// IDENTITAS WEBSITE
+// ==========================================================
+
+const SITE_NAME = 'Asyiqul Quran';
+const SITE_URL = 'https://www.asyiq.ponpes.id';
 
 // ==========================================================
 // TYPES
@@ -117,6 +126,12 @@ const rupiah = (value: number | null | undefined) => {
 const formatDate = (value?: string) => {
   if (!value) return '-';
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
   try {
     return new Intl.DateTimeFormat('id-ID', {
       day: '2-digit',
@@ -124,7 +139,9 @@ const formatDate = (value?: string) => {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-    }).format(new Date(value));
+      timeZone: 'Asia/Jakarta',
+      hour12: false,
+    }).format(date);
   } catch {
     return '-';
   }
@@ -132,6 +149,29 @@ const formatDate = (value?: string) => {
 
 const cleanPhoneNumber = (value: string) =>
   value.replace(/[^0-9]/g, '');
+
+const normalizeReferralPhone = (value: string) => {
+  let phone = cleanPhoneNumber(value);
+
+  if (phone.startsWith('0')) {
+    phone = `62${phone.slice(1)}`;
+  } else if (phone.startsWith('8')) {
+    phone = `62${phone}`;
+  }
+
+  return phone;
+};
+
+const formatPercent = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0%';
+  }
+
+  return `${value.toLocaleString('id-ID', {
+    minimumFractionDigits: value < 10 ? 1 : 0,
+    maximumFractionDigits: 1,
+  })}%`;
+};
 
 const getWithdrawalStatus = (status?: WithdrawalStatus) => {
   switch (status) {
@@ -189,6 +229,11 @@ export default function FundraiserStatsPage() {
   const [stats, setStats] = useState<FundraiserStats | null>(null);
   const [error, setError] = useState('');
 
+  // Views dari Supabase.
+  // Halaman statistik hanya MEMBACA views dan tidak menambah view.
+  const [fundraiserViews, setFundraiserViews] = useState(0);
+  const [viewsLoading, setViewsLoading] = useState(false);
+
   const [selectedSlug, setSelectedSlug] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -209,6 +254,59 @@ export default function FundraiserStatsPage() {
   const [withdrawError, setWithdrawError] = useState('');
 
   // ========================================================
+  // LOAD FUNDRAISER VIEWS FROM SUPABASE
+  // ========================================================
+
+  const loadFundraiserViews = async (referralKey: string) => {
+    const key = normalizeReferralPhone(referralKey);
+
+    if (!key) {
+      setFundraiserViews(0);
+      return;
+    }
+
+    setViewsLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/views?type=fundraiser&key=${encodeURIComponent(key)}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        }
+      );
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.success) {
+        console.warn(
+          `[${SITE_NAME}] Views fundraiser tidak berhasil dimuat.`,
+          json
+        );
+        setFundraiserViews(0);
+        return;
+      }
+
+      setFundraiserViews(
+        Number.isFinite(Number(json.views))
+          ? Math.max(Number(json.views), 0)
+          : 0
+      );
+    } catch (err) {
+      console.error(
+        `[${SITE_NAME}] Gagal memuat views fundraiser:`,
+        err
+      );
+      setFundraiserViews(0);
+    } finally {
+      setViewsLoading(false);
+    }
+  };
+
+  // ========================================================
   // LOAD STATS
   // ========================================================
 
@@ -224,28 +322,48 @@ export default function FundraiserStatsPage() {
       const res = await fetch(
         `/api/fundraiser/stats?phone=${encodeURIComponent(
           cleanedPhone
-        )}&t=${Date.now()}`,
+        )}`,
         {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
           cache: 'no-store',
         }
       );
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json.success) {
+      if (!res.ok || !json?.success) {
         setStats(null);
+        setFundraiserViews(0);
+
         setError(
-          json.message ||
+          json?.message ||
             'Data fundraiser tidak berhasil ditemukan.'
         );
+
         return;
       }
 
       setStats(json);
+
+      // Gunakan nomor yang tersimpan di profil sebagai referral key utama.
+      // Jika API belum mengembalikan phone, gunakan nomor yang dimasukkan user.
+      const referralKey = normalizeReferralPhone(
+        json?.profile?.phone || cleanedPhone
+      );
+
+      await loadFundraiserViews(referralKey);
     } catch (err) {
-      console.error(err);
+      console.error(
+        `[${SITE_NAME}] Gagal memuat dashboard fundraiser:`,
+        err
+      );
 
       setStats(null);
+      setFundraiserViews(0);
+
       setError(
         'Terjadi gangguan jaringan saat memuat data fundraiser.'
       );
@@ -264,6 +382,7 @@ export default function FundraiserStatsPage() {
     setShowWithdrawal(false);
     setWithdrawMessage('');
     setWithdrawError('');
+    setFundraiserViews(0);
 
     await loadStats(phone);
   };
@@ -277,6 +396,29 @@ export default function FundraiserStatsPage() {
   const commissionRate = stats?.commissionRate ?? 0.1;
 
   const totalDonation = Number(stats?.totalEarnings || 0);
+
+  const donationCount = Math.max(
+    Number(stats?.donationCount || 0),
+    0
+  );
+
+  /**
+   * Rasio konversi = jumlah transaksi donasi sukses / unique views referral.
+   *
+   * Catatan:
+   * donationCount adalah jumlah transaksi, bukan selalu jumlah orang unik.
+   * Karena itu, bila satu orang berdonasi lebih dari sekali, rasio secara
+   * teoritis dapat lebih dari 100%.
+   */
+  const conversionRate =
+    fundraiserViews > 0
+      ? (donationCount / fundraiserViews) * 100
+      : 0;
+
+  const averageDonation =
+    donationCount > 0
+      ? Math.round(totalDonation / donationCount)
+      : 0;
 
   const totalCommission =
     stats?.totalCommission ??
@@ -329,21 +471,28 @@ export default function FundraiserStatsPage() {
     );
 
   // ========================================================
+  // AFFILIATE / REFERRAL KEY
+  // ========================================================
+
+  const referralKey = useMemo(() => {
+    return normalizeReferralPhone(
+      stats?.profile?.phone || phone
+    );
+  }, [stats?.profile?.phone, phone]);
+
+  // ========================================================
   // AFFILIATE LINK
   // ========================================================
 
   const affiliateUrl = useMemo(() => {
-    if (!selectedSlug) return '';
+    if (!selectedSlug || !referralKey) {
+      return '';
+    }
 
-    const baseUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : '';
-
-    return `${baseUrl}/campaign/${selectedSlug}?ref=${cleanPhoneNumber(
-      phone
-    )}`;
-  }, [selectedSlug, phone]);
+    return `${SITE_URL}/campaign/${encodeURIComponent(
+      selectedSlug
+    )}?ref=${encodeURIComponent(referralKey)}`;
+  }, [selectedSlug, referralKey]);
 
   const handleCopy = async () => {
     if (!affiliateUrl) return;
@@ -370,8 +519,8 @@ export default function FundraiserStatsPage() {
 
     const message = [
       program?.title
-        ? `Mari ikut mendukung program "${program.title}".`
-        : 'Mari ikut mendukung program kebaikan ini.',
+        ? `Mari ikut mendukung program "${program.title}" bersama ${SITE_NAME}.`
+        : `Mari ikut mendukung program kebaikan bersama ${SITE_NAME}.`,
       '',
       affiliateUrl,
     ].join('\n');
@@ -441,7 +590,7 @@ export default function FundraiserStatsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: cleanPhoneNumber(phone),
+          phone: referralKey || cleanPhoneNumber(phone),
           amount,
           note: withdrawNote.trim(),
         }),
@@ -505,8 +654,8 @@ export default function FundraiserStatsPage() {
               </div>
 
               <p className="text-xs leading-relaxed text-gray-500">
-                Pantau donasi, komisi, link referral dan
-                riwayat pencairan dalam satu halaman.
+                Pantau tayangan link, konversi donasi, komisi,
+                referral, dan riwayat pencairan fundraiser {SITE_NAME}.
               </p>
             </div>
 
@@ -545,6 +694,8 @@ export default function FundraiserStatsPage() {
 
               <input
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 required
                 placeholder="Contoh: 08123456789"
                 value={phone}
@@ -596,7 +747,7 @@ export default function FundraiserStatsPage() {
 
                 <div>
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    Fundraiser
+                    Fundraiser {SITE_NAME}
                   </p>
 
                   <h2 className="text-lg font-black text-gray-900">
@@ -604,7 +755,7 @@ export default function FundraiserStatsPage() {
                   </h2>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    {cleanPhoneNumber(phone)}
+                    {referralKey || cleanPhoneNumber(phone)}
                   </p>
                 </div>
 
@@ -627,7 +778,51 @@ export default function FundraiserStatsPage() {
             </section>
 
             {/* ==================================================
-                SUMMARY
+                PERFORMANCE VIEWS / CONVERSION
+            ================================================== */}
+
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+
+              <StatCard
+                icon={<Eye size={19} />}
+                label="Tayangan Link"
+                value={
+                  viewsLoading
+                    ? '...'
+                    : fundraiserViews.toLocaleString('id-ID')
+                }
+                description="Pengunjung unik melalui link referral"
+              />
+
+              <StatCard
+                icon={<Users size={19} />}
+                label="Donasi Sukses"
+                value={donationCount.toLocaleString('id-ID')}
+                description="Transaksi dari referral fundraiser"
+              />
+
+              <StatCard
+                icon={<Percent size={19} />}
+                label="Rasio Konversi"
+                value={
+                  viewsLoading
+                    ? '...'
+                    : formatPercent(conversionRate)
+                }
+                description="Donasi sukses dibanding tayangan link"
+              />
+
+              <StatCard
+                icon={<HandCoins size={19} />}
+                label="Rata-rata Donasi"
+                value={rupiah(averageDonation)}
+                description="Rata-rata nominal per donasi sukses"
+              />
+
+            </section>
+
+            {/* ==================================================
+                FINANCIAL SUMMARY
             ================================================== */}
 
             <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -636,7 +831,7 @@ export default function FundraiserStatsPage() {
                 icon={<HandCoins size={19} />}
                 label="Dana Dihimpun"
                 value={rupiah(totalDonation)}
-                description={`${stats.donationCount || 0} donasi sukses`}
+                description={`${donationCount} donasi sukses`}
               />
 
               <StatCard
@@ -668,6 +863,7 @@ export default function FundraiserStatsPage() {
                 }
                 highlight
               />
+
             </section>
 
             {/* ==================================================
