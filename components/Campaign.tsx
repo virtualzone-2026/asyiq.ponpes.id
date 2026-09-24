@@ -11,11 +11,15 @@ import Link from 'next/link';
 // TYPES
 // ============================================================================
 
+interface SanitySlug {
+  current?: string;
+}
+
 interface CampaignItem {
   id?: string;
   _id?: string;
 
-  slug?: string;
+  slug?: string | SanitySlug;
 
   title?: string;
 
@@ -24,9 +28,11 @@ interface CampaignItem {
   image?: string;
 
   collected?: string;
+
   collectedRaw?: number;
 
   target?: string;
+
   targetAmount?: number;
 }
 
@@ -60,49 +66,129 @@ function safeString(
 }
 
 // ============================================================================
+// SLUG HELPER
+// ============================================================================
+
+function getSlug(
+  value: CampaignItem['slug']
+): string {
+  if (
+    typeof value === 'string'
+  ) {
+    return value.trim();
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    typeof value.current ===
+      'string'
+  ) {
+    return value.current.trim();
+  }
+
+  return '';
+}
+
+// ============================================================================
+// FORMAT RUPIAH
+// ============================================================================
+
+function rupiah(
+  value: unknown
+): string {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return 'Rp 0';
+  }
+
+  return new Intl.NumberFormat(
+    'id-ID',
+    {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }
+  ).format(number);
+}
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
 export default function Campaign({
-  initialData = [],
+  initialData,
 }: CampaignProps) {
+  // ==========================================================================
+  // INITIAL DATA
+  // ==========================================================================
+
+  const initialPrograms =
+    Array.isArray(initialData)
+      ? initialData
+      : [];
+
   const [
     programs,
     setPrograms,
-  ] = useState<CampaignItem[]>(
-    initialData.length > 0
-      ? initialData
-      : []
-  );
+  ] =
+    useState<CampaignItem[]>(
+      initialPrograms
+    );
 
   const [
     loading,
     setLoading,
-  ] = useState(
-    initialData.length === 0
-  );
+  ] =
+    useState(
+      initialPrograms.length === 0
+    );
 
   const [
     error,
     setError,
-  ] = useState('');
+  ] =
+    useState('');
 
   const [
     selectedCategory,
     setSelectedCategory,
-  ] = useState('SEMUA');
+  ] =
+    useState('SEMUA');
 
   const [
     searchQuery,
     setSearchQuery,
-  ] = useState('');
+  ] =
+    useState('');
 
   // ==========================================================================
   // FETCH PROGRAM
   // ==========================================================================
+  //
+  // PENTING:
+  //
+  // useEffect sengaja hanya dijalankan sekali saat mount.
+  //
+  // Jangan menggunakan:
+  //
+  // }, [initialData]);
+  //
+  // karena initialData kosong bisa menyebabkan effect berjalan berulang.
+  //
+  // ==========================================================================
 
   useEffect(() => {
+    // Jika data dari server sudah tersedia,
+    // tidak perlu fetch lagi.
+
     if (
+      Array.isArray(initialData) &&
       initialData.length > 0
     ) {
       setPrograms(
@@ -117,9 +203,10 @@ export default function Campaign({
     const controller =
       new AbortController();
 
-    async function loadPrograms() {
+    async function fetchPrograms() {
       try {
         setLoading(true);
+
         setError('');
 
         const response =
@@ -141,30 +228,53 @@ export default function Campaign({
             }
           );
 
+        // ================================================================
+        // RESPONSE ERROR
+        // ================================================================
+
         if (!response.ok) {
           throw new Error(
             `HTTP ${response.status}`
           );
         }
 
+        // ================================================================
+        // JSON
+        // ================================================================
+
         const json =
           await response.json();
 
+        // ================================================================
+        // VALIDASI RESPONSE
+        // ================================================================
+
         if (
-          json?.success &&
-          Array.isArray(
+          !json?.success
+        ) {
+          throw new Error(
+            json?.message ||
+              json?.error ||
+              'API program mengembalikan status gagal.'
+          );
+        }
+
+        if (
+          !Array.isArray(
             json?.data
           )
         ) {
-          setPrograms(
-            json.data
-          );
-        } else {
-          setPrograms(
-            []
+          throw new Error(
+            'Data program dari API bukan array.'
           );
         }
+
+        setPrograms(
+          json.data
+        );
       } catch (err) {
+        // Abort bukan error sebenarnya.
+
         if (
           err instanceof Error &&
           err.name ===
@@ -174,33 +284,33 @@ export default function Campaign({
         }
 
         console.error(
-          'Campaign component fetch error:',
+          '[Campaign] Fetch programs error:',
           err
         );
 
         setPrograms([]);
 
         setError(
-          'Program belum berhasil dimuat.'
+          'Program belum berhasil dimuat. Silakan muat ulang halaman.'
         );
       } finally {
         if (
           !controller.signal
             .aborted
         ) {
-          setLoading(
-            false
-          );
+          setLoading(false);
         }
       }
     }
 
-    loadPrograms();
+    fetchPrograms();
 
     return () => {
       controller.abort();
     };
-  }, [initialData]);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ==========================================================================
   // CATEGORY
@@ -235,12 +345,12 @@ export default function Campaign({
     }, [programs]);
 
   // ==========================================================================
-  // FILTER
+  // FILTER PROGRAM
   // ==========================================================================
 
   const filteredPrograms =
     useMemo(() => {
-      const query =
+      const search =
         searchQuery
           .trim()
           .toLowerCase();
@@ -264,9 +374,9 @@ export default function Campaign({
               selectedCategory;
 
           const matchesSearch =
-            !query ||
+            !search ||
             title.includes(
-              query
+              search
             );
 
           return (
@@ -287,8 +397,18 @@ export default function Campaign({
 
   if (loading) {
     return (
-      <div className="text-center py-16 text-gray-500 font-medium text-xs tracking-wider">
-        MEMUAT PROGRAM KEBAIKAN...
+      <div className="py-16 md:py-20 flex items-center justify-center">
+
+        <div className="text-center space-y-3">
+
+          <div className="w-7 h-7 border-2 border-gray-200 border-t-emerald-600 rounded-full animate-spin mx-auto" />
+
+          <p className="text-gray-400 font-bold text-[11px] uppercase tracking-wider">
+            Memuat Program Kebaikan...
+          </p>
+
+        </div>
+
       </div>
     );
   }
@@ -306,7 +426,9 @@ export default function Campaign({
 
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 w-full border-b border-gray-100 pb-4">
 
-        {/* FILTER */}
+        {/* ===================================================================
+            CATEGORY FILTER
+            =================================================================== */}
 
         <div className="flex flex-wrap items-center gap-2">
 
@@ -314,9 +436,7 @@ export default function Campaign({
             (category) => (
 
               <button
-                key={
-                  category
-                }
+                key={category}
                 type="button"
                 onClick={() =>
                   setSelectedCategory(
@@ -341,7 +461,9 @@ export default function Campaign({
 
         </div>
 
-        {/* SEARCH */}
+        {/* ===================================================================
+            SEARCH
+            =================================================================== */}
 
         <div className="relative max-w-xs w-full">
 
@@ -350,9 +472,8 @@ export default function Campaign({
           </span>
 
           <input
-            type="text"
+            type="search"
             placeholder="Cari galang dana..."
-            className="w-full bg-white border border-gray-200 text-xs font-bold text-gray-700 pl-9 pr-4 py-2.5 rounded-none placeholder-gray-400 focus:outline-none focus:border-emerald-500 shadow-xs transition-all"
             value={
               searchQuery
             }
@@ -360,10 +481,10 @@ export default function Campaign({
               event
             ) =>
               setSearchQuery(
-                event.target
-                  .value
+                event.target.value
               )
             }
+            className="w-full bg-white border border-gray-200 text-xs font-bold text-gray-700 pl-9 pr-4 py-2.5 rounded-none placeholder-gray-400 focus:outline-none focus:border-emerald-500 shadow-xs transition-all"
           />
 
         </div>
@@ -375,34 +496,54 @@ export default function Campaign({
           ===================================================================== */}
 
       {error && (
-        <div className="border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-red-600">
-          {error}
+        <div className="border border-red-100 bg-red-50 p-4">
+
+          <p className="text-xs font-bold text-red-600">
+            {error}
+          </p>
+
         </div>
       )}
 
       {/* =====================================================================
-          GRID
+          EMPTY
           ===================================================================== */}
 
-      {filteredPrograms.length ===
-      0 ? (
+      {!error &&
+      filteredPrograms.length ===
+        0 && (
 
-        <div className="text-center py-16 bg-white rounded-none border border-gray-100 text-gray-400 text-xs font-bold uppercase tracking-wider">
-          Tidak ditemukan program
-          galang dana yang cocok.
+        <div className="text-center py-16 bg-white border border-gray-100">
+
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">
+            Tidak ditemukan program
+            galang dana yang cocok.
+          </p>
+
         </div>
 
-      ) : (
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* =====================================================================
+          GRID CAMPAIGN
+          ===================================================================== */}
+
+      {filteredPrograms.length >
+        0 && (
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
 
           {filteredPrograms.map(
             (
               program,
               index
             ) => {
+              // ==============================================================
+              // PROGRAM DATA
+              // ==============================================================
+
               const slug =
-                safeString(
+                getSlug(
                   program.slug
                 );
 
@@ -424,29 +565,56 @@ export default function Campaign({
                   FALLBACK_IMAGE
                 );
 
+              // ==============================================================
+              // COLLECTED
+              // ==============================================================
+
               const collected =
                 safeString(
-                  program.collected,
-                  'Rp 0'
+                  program.collected
+                ) ||
+                rupiah(
+                  program.collectedRaw
                 );
+
+              // ==============================================================
+              // TARGET
+              // ==============================================================
 
               const target =
                 safeString(
-                  program.target,
-                  'Rp 0'
+                  program.target
+                ) ||
+                rupiah(
+                  program.targetAmount
                 );
+
+              // ==============================================================
+              // KEY
+              // ==============================================================
 
               const key =
                 program._id ||
                 program.id ||
                 slug ||
-                `campaign-${index}`;
+                `program-${index}`;
 
-              // Jika slug kosong,
-              // jangan buat link rusak.
+              // ==============================================================
+              // INVALID SLUG
+              // ==============================================================
+
               if (!slug) {
+                console.warn(
+                  '[Campaign] Program tanpa slug:',
+                  title
+                );
+
                 return null;
               }
+
+              // ==============================================================
+              // CARD
+              // ==============================================================
 
               return (
 
@@ -459,7 +627,7 @@ export default function Campaign({
                   className="group block h-full"
                 >
 
-                  <article className="h-full bg-white rounded-none p-4 shadow-xs border border-gray-100 flex flex-col justify-between cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-emerald-300 hover:-translate-y-0.5">
+                  <article className="h-full bg-white border border-gray-100 p-4 flex flex-col justify-between shadow-xs cursor-pointer transition-all duration-300 hover:border-emerald-300 hover:shadow-lg hover:-translate-y-1">
 
                     <div>
 
@@ -467,17 +635,13 @@ export default function Campaign({
                           IMAGE
                           ===================================================== */}
 
-                      <div className="relative h-40 w-full rounded-none overflow-hidden bg-gray-50 border-b border-gray-100">
+                      <div className="relative h-40 md:h-44 w-full overflow-hidden bg-gray-100 border-b border-gray-100">
 
                         <img
-                          src={
-                            image
-                          }
-                          alt={
-                            title
-                          }
+                          src={image}
+                          alt={title}
                           loading="lazy"
-                          className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-[1.04]"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                           onError={(
                             event
                           ) => {
@@ -488,13 +652,11 @@ export default function Campaign({
 
                         {/* CATEGORY */}
 
-                        <span className="absolute top-2 left-2 bg-yellow-400 text-gray-900 text-[9px] font-black px-2 py-0.5 rounded-none uppercase tracking-wide shadow-sm">
-                          {
-                            category
-                          }
+                        <span className="absolute top-2 left-2 bg-yellow-400 text-gray-900 text-[9px] font-black px-2.5 py-1 uppercase tracking-wide shadow-sm">
+                          {category}
                         </span>
 
-                        {/* HOVER OVERLAY */}
+                        {/* HOVER */}
 
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.04] transition-colors duration-300 pointer-events-none" />
 
@@ -504,15 +666,15 @@ export default function Campaign({
                           TITLE
                           ===================================================== */}
 
-                      <h2 className="font-black text-gray-800 mt-3 text-sm uppercase leading-snug line-clamp-2 min-h-[2.5rem] tracking-tight transition-colors duration-300 group-hover:text-emerald-600">
+                      <h2 className="font-black text-gray-800 mt-3 text-sm uppercase leading-snug line-clamp-2 min-h-[2.5rem] tracking-tight group-hover:text-emerald-600 transition-colors">
                         {title}
                       </h2>
 
                       {/* =====================================================
-                          FUND STATUS
+                          FUND INFO
                           ===================================================== */}
 
-                      <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-4 border-t border-gray-50 pt-3">
+                      <div className="grid grid-cols-2 gap-3 text-[10px] text-gray-400 font-bold mt-4 border-t border-gray-100 pt-3">
 
                         {/* COLLECTED */}
 
@@ -522,10 +684,8 @@ export default function Campaign({
                             Terkumpul
                           </p>
 
-                          <p className="font-black text-emerald-600 text-xs mt-0.5">
-                            {
-                              collected
-                            }
+                          <p className="font-black text-emerald-600 text-xs mt-1">
+                            {collected}
                           </p>
 
                         </div>
@@ -538,10 +698,8 @@ export default function Campaign({
                             Target
                           </p>
 
-                          <p className="font-black text-gray-700 text-xs mt-0.5">
-                            {
-                              target
-                            }
+                          <p className="font-black text-gray-700 text-xs mt-1">
+                            {target}
                           </p>
 
                         </div>
@@ -551,18 +709,19 @@ export default function Campaign({
                     </div>
 
                     {/* =======================================================
-                        CTA
+                        BUTTON LOOK
                         ======================================================= */}
 
-                    <div className="mt-4 pt-3 border-t border-gray-50">
+                    <div className="mt-4 pt-3 border-t border-gray-100">
 
                       {/*
-                        PENTING:
-                        Ini BUKAN <Link> lagi karena seluruh
-                        card sudah menjadi Link.
+                        Seluruh card sudah menjadi Link.
+
+                        Jadi bagian ini cukup DIV,
+                        jangan membuat Link di dalam Link.
                       */}
 
-                      <div className="w-full text-center bg-emerald-600 group-hover:bg-emerald-700 text-white font-black py-2.5 rounded-none transition text-[10px] uppercase tracking-widest shadow-xs">
+                      <div className="w-full text-center bg-emerald-600 group-hover:bg-emerald-700 text-white font-black py-2.5 transition-colors text-[10px] uppercase tracking-widest shadow-xs">
                         Infak Sekarang ➔
                       </div>
 
