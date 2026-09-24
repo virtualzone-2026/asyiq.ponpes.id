@@ -1,47 +1,90 @@
+// app/api/fundraiser/stats/route.ts
+
 import { NextResponse } from 'next/server';
-import { clientPublik as client } from '@/lib/sanity';
+import { createClient } from '@sanity/client';
+
+// ============================================================================
+// NEXT CONFIG
+// ============================================================================
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// ==========================================================
-// KONFIGURASI KOMISI
-// ==========================================================
+// ============================================================================
+// SANITY CONFIG
+// ============================================================================
 
-const DEFAULT_COMMISSION_RATE = 0.1; // 10%
+const SANITY_PROJECT_ID =
+  process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ||
+  'lsnco71s';
+
+const SANITY_DATASET =
+  process.env.NEXT_PUBLIC_SANITY_DATASET ||
+  'production';
+
+/**
+ * Untuk membaca draft, kita membutuhkan token server.
+ *
+ * Prioritas:
+ *
+ * 1. SANITY_API_READ_TOKEN
+ * 2. SANITY_API_WRITE_TOKEN
+ *
+ * Jangan pernah memakai NEXT_PUBLIC_ untuk token.
+ */
+const SANITY_TOKEN =
+  process.env.SANITY_API_READ_TOKEN ||
+  process.env.SANITY_API_WRITE_TOKEN;
+
+// ============================================================================
+// SANITY SERVER CLIENT
+// ============================================================================
+
+const serverClient = createClient({
+  projectId: SANITY_PROJECT_ID,
+  dataset: SANITY_DATASET,
+
+  apiVersion: '2026-09-24',
+
+  useCdn: false,
+
+  ...(SANITY_TOKEN
+    ? {
+        token: SANITY_TOKEN,
+      }
+    : {}),
+});
+
+// ============================================================================
+// CONFIG FUNDRAISER
+// ============================================================================
+
+const DEFAULT_COMMISSION_RATE = 0.1;
 
 const MINIMUM_WITHDRAWAL = Number(
-  process.env.FUNDRAISER_MIN_WITHDRAWAL || 50000
+  process.env.FUNDRAISER_MIN_WITHDRAWAL ||
+    50000
 );
 
 const WITHDRAWAL_ENABLED =
-  process.env.FUNDRAISER_WITHDRAWAL_ENABLED !== 'false';
+  process.env.FUNDRAISER_WITHDRAWAL_ENABLED !==
+  'false';
 
-// ==========================================================
+// ============================================================================
 // TYPES
-// ==========================================================
+// ============================================================================
 
 type FundraiserProfile = {
   _id: string;
+
+  _updatedAt?: string;
+
   name?: string;
   phone?: string;
   status?: string;
 
-  /**
-   * Data lama:
-   * total fee yang sebelumnya sudah ditandai dibayar admin.
-   *
-   * Tetap dipertahankan untuk backward compatibility.
-   */
   feePaid?: number;
 
-  /**
-   * Opsional.
-   *
-   * Bisa disimpan:
-   * 10   -> dianggap 10%
-   * 0.1  -> dianggap 10%
-   */
   commissionRate?: number;
 
   programTitle?: string;
@@ -54,10 +97,15 @@ type FundraiserProfile = {
 
 type DonationItem = {
   _id?: string;
+
   donorName?: string;
+
   amount?: number;
+
   slug?: string;
+
   programTitle?: string;
+
   createdAt?: string;
   paidAt?: string;
 };
@@ -73,7 +121,9 @@ type WithdrawalStatus =
 
 type WithdrawalItem = {
   _id?: string;
+
   amount?: number;
+
   status?: WithdrawalStatus;
 
   requestedAt?: string;
@@ -85,6 +135,7 @@ type WithdrawalItem = {
   accountNumber?: string;
 
   referenceNumber?: string;
+
   note?: string;
   adminNote?: string;
 };
@@ -95,51 +146,50 @@ type ProgramItem = {
 };
 
 type StatsQueryResult = {
-  profile: FundraiserProfile | null;
-  donations: DonationItem[];
-  withdrawals: WithdrawalItem[];
-  programs: ProgramItem[];
+  profileCandidates?: FundraiserProfile[];
+
+  donations?: DonationItem[];
+
+  withdrawals?: WithdrawalItem[];
+
+  programs?: ProgramItem[];
 };
 
-// ==========================================================
-// HELPERS
-// ==========================================================
+// ============================================================================
+// PHONE NORMALIZER
+// ============================================================================
 
-/**
- * Normalisasi nomor WhatsApp.
- *
- * Contoh:
- *
- * 08123456789
- * +628123456789
- * 628123456789
- *
- * semuanya bisa dicocokkan.
- */
 function normalizePhone(input: string) {
   const raw = input.trim();
 
-  const digits = raw.replace(/[^0-9]/g, '');
+  const digits =
+    raw.replace(/[^0-9]/g, '');
 
   let international = digits;
 
   if (digits.startsWith('0')) {
-    international = `62${digits.slice(1)}`;
-  }
-
-  if (digits.startsWith('8')) {
-    international = `62${digits}`;
+    international =
+      `62${digits.slice(1)}`;
+  } else if (
+    digits.startsWith('8')
+  ) {
+    international =
+      `62${digits}`;
   }
 
   let local = digits;
 
-  if (international.startsWith('62')) {
-    local = `0${international.slice(2)}`;
+  if (
+    international.startsWith('62')
+  ) {
+    local =
+      `0${international.slice(2)}`;
   }
 
-  const plus = international
-    ? `+${international}`
-    : '';
+  const plus =
+    international
+      ? `+${international}`
+      : '';
 
   return {
     raw,
@@ -150,90 +200,305 @@ function normalizePhone(input: string) {
   };
 }
 
-/**
- * Commission rate bisa ditulis:
- *
- * 10  = 10%
- * 0.1 = 10%
- */
+// ============================================================================
+// STATUS NORMALIZER
+// ============================================================================
+
+function normalizeFundraiserStatus(
+  value?: string
+): string {
+  const status =
+    String(value || '')
+      .trim()
+      .toLowerCase();
+
+  // APPROVED
+  if (
+    status === 'approved' ||
+    status === 'active' ||
+    status === 'aktif' ||
+    status === 'disetujui' ||
+    status === 'verified' ||
+    status === 'terverifikasi'
+  ) {
+    return 'approved';
+  }
+
+  // REJECTED
+  if (
+    status === 'rejected' ||
+    status === 'ditolak'
+  ) {
+    return 'rejected';
+  }
+
+  // CANCELLED
+  if (
+    status === 'cancelled' ||
+    status === 'canceled' ||
+    status === 'dibatalkan'
+  ) {
+    return 'cancelled';
+  }
+
+  // PENDING
+  if (
+    status === 'pending' ||
+    status === 'waiting' ||
+    status === 'menunggu' ||
+    status === 'menunggu verifikasi'
+  ) {
+    return 'pending';
+  }
+
+  return status || 'pending';
+}
+
+// ============================================================================
+// RESOLVE PROFILE
+// ============================================================================
+//
+// Sanity bisa memiliki:
+//
+// abc123
+//
+// dan:
+//
+// drafts.abc123
+//
+// Jika keduanya ditemukan, draft diprioritaskan.
+//
+// ============================================================================
+
+function resolveFundraiserProfile(
+  candidates:
+    | FundraiserProfile[]
+    | undefined
+): FundraiserProfile | null {
+  if (
+    !Array.isArray(candidates) ||
+    candidates.length === 0
+  ) {
+    return null;
+  }
+
+  /**
+   * Kelompokkan dokumen berdasarkan ID asli.
+   *
+   * drafts.abc123
+   *
+   * menjadi:
+   *
+   * abc123
+   */
+  const documents =
+    new Map<
+      string,
+      FundraiserProfile
+    >();
+
+  for (const candidate of candidates) {
+    if (!candidate?._id) {
+      continue;
+    }
+
+    const isDraft =
+      candidate._id.startsWith(
+        'drafts.'
+      );
+
+    const baseId =
+      candidate._id.replace(
+        /^drafts\./,
+        ''
+      );
+
+    const existing =
+      documents.get(baseId);
+
+    /**
+     * Jika belum ada → gunakan.
+     */
+    if (!existing) {
+      documents.set(
+        baseId,
+        candidate
+      );
+
+      continue;
+    }
+
+    /**
+     * Draft SELALU lebih diprioritaskan
+     * daripada versi published dengan ID yang sama.
+     */
+    if (isDraft) {
+      documents.set(
+        baseId,
+        candidate
+      );
+    }
+  }
+
+  const resolved =
+    Array.from(
+      documents.values()
+    );
+
+  if (resolved.length === 0) {
+    return null;
+  }
+
+  /**
+   * Jika ternyata terdapat beberapa dokumen
+   * fundraiser dengan nomor HP sama,
+   * gunakan yang terakhir diperbarui.
+   */
+  resolved.sort(
+    (a, b) => {
+      const aTime =
+        a._updatedAt
+          ? new Date(
+              a._updatedAt
+            ).getTime()
+          : 0;
+
+      const bTime =
+        b._updatedAt
+          ? new Date(
+              b._updatedAt
+            ).getTime()
+          : 0;
+
+      return bTime - aTime;
+    }
+  );
+
+  return resolved[0];
+}
+
+// ============================================================================
+// COMMISSION RATE
+// ============================================================================
+
 function normalizeCommissionRate(
   input?: number | null
 ): number {
-  const rate = Number(input);
+  const rate =
+    Number(input);
 
-  if (!Number.isFinite(rate) || rate <= 0) {
+  if (
+    !Number.isFinite(rate) ||
+    rate <= 0
+  ) {
     return DEFAULT_COMMISSION_RATE;
   }
 
+  /**
+   * 10 dianggap 10%.
+   */
   if (rate > 1) {
-    return Math.min(rate / 100, 1);
+    return Math.min(
+      rate / 100,
+      1
+    );
   }
 
-  return Math.min(rate, 1);
+  /**
+   * 0.1 dianggap 10%.
+   */
+  return Math.min(
+    rate,
+    1
+  );
 }
 
-/**
- * Masking rekening karena endpoint saat ini
- * hanya memakai nomor WhatsApp.
- *
- * Contoh:
- * 1234567890 -> ******7890
- */
+// ============================================================================
+// MASK ACCOUNT NUMBER
+// ============================================================================
+
 function maskAccountNumber(
   accountNumber?: string
 ): string | undefined {
-  if (!accountNumber) return undefined;
+  if (!accountNumber) {
+    return undefined;
+  }
 
-  const clean = String(accountNumber).replace(
-    /\s+/g,
-    ''
-  );
+  const clean =
+    String(
+      accountNumber
+    ).replace(
+      /\s+/g,
+      ''
+    );
 
-  if (clean.length <= 4) {
+  if (
+    clean.length <= 4
+  ) {
     return clean;
   }
 
-  return `${'*'.repeat(clean.length - 4)}${clean.slice(
-    -4
-  )}`;
+  return `${'*'.repeat(
+    clean.length - 4
+  )}${clean.slice(-4)}`;
 }
 
-/**
- * Response finansial tidak boleh dicache.
- */
+// ============================================================================
+// NO CACHE RESPONSE
+// ============================================================================
+
 function jsonNoStore(
   body: unknown,
   status = 200
 ) {
-  return NextResponse.json(body, {
-    status,
-    headers: {
-      'Cache-Control':
-        'no-store, no-cache, max-age=0, must-revalidate',
-      Pragma: 'no-cache',
-      Expires: '0',
-    },
-  });
+  return NextResponse.json(
+    body,
+    {
+      status,
+
+      headers: {
+        'Cache-Control':
+          'no-store, no-cache, max-age=0, must-revalidate',
+
+        Pragma:
+          'no-cache',
+
+        Expires:
+          '0',
+      },
+    }
+  );
 }
 
-// ==========================================================
+// ============================================================================
 // GET
-// ==========================================================
+// ============================================================================
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request
+) {
   try {
-    // ======================================================
-    // 1. AMBIL NOMOR WHATSAPP
-    // ======================================================
+    // ========================================================================
+    // 1. PHONE PARAMETER
+    // ========================================================================
 
-    const { searchParams } = new URL(request.url);
+    const {
+      searchParams,
+    } =
+      new URL(
+        request.url
+      );
 
-    const phone = searchParams.get('phone');
+    const phone =
+      searchParams.get(
+        'phone'
+      );
 
     if (!phone) {
       return jsonNoStore(
         {
           success: false,
+
           message:
             'Nomor WhatsApp wajib disertakan.',
         },
@@ -241,19 +506,24 @@ export async function GET(request: Request) {
       );
     }
 
-    // ======================================================
-    // 2. NORMALISASI NOMOR
-    // ======================================================
+    // ========================================================================
+    // 2. NORMALIZE PHONE
+    // ========================================================================
 
-    const normalized = normalizePhone(phone);
+    const normalized =
+      normalizePhone(
+        phone
+      );
 
     if (
       !normalized.digits ||
-      normalized.digits.length < 8
+      normalized.digits.length <
+        8
     ) {
       return jsonNoStore(
         {
           success: false,
+
           message:
             'Format nomor WhatsApp tidak valid.',
         },
@@ -261,28 +531,22 @@ export async function GET(request: Request) {
       );
     }
 
-    // ======================================================
-    // 3. GROQ QUERY
-    // ======================================================
+    // ========================================================================
+    // 3. GROQ
+    // ========================================================================
     //
-    // Mengambil:
+    // PENTING:
     //
-    // - profile fundraiser
-    // - donasi sukses
-    // - riwayat withdrawal
-    // - seluruh program
+    // profileCandidates TIDAK membuang draft.
     //
-    // Schema penarikan yang digunakan:
+    // Donations / withdrawal / program tetap hanya memakai published data.
     //
-    // _type: fundraiserWithdrawal
-    //
-    // ======================================================
+    // ========================================================================
 
     const query = `
       {
-        "profile": *[
+        "profileCandidates": *[
           _type == "fundraiser" &&
-          !(_id in path("drafts.**")) &&
           (
             phone == $phoneInternational ||
             phone == $phoneLocal ||
@@ -290,11 +554,15 @@ export async function GET(request: Request) {
             phone == $phoneRaw ||
             phone == $phoneDigits
           )
-        ][0] {
+        ]
+        | order(_updatedAt desc) {
           _id,
+          _updatedAt,
+
           name,
           phone,
           status,
+
           feePaid,
           commissionRate,
 
@@ -308,8 +576,11 @@ export async function GET(request: Request) {
 
         "donations": *[
           _type == "donationTransaction" &&
+
           !(_id in path("drafts.**")) &&
+
           status == "success" &&
+
           (
             fundraiserPhone == $phoneInternational ||
             fundraiserPhone == $phoneLocal ||
@@ -319,29 +590,41 @@ export async function GET(request: Request) {
           )
         ]
         | order(
-          coalesce(paidAt, _createdAt) desc
-        ) {
+            coalesce(
+              paidAt,
+              _createdAt
+            ) desc
+          ) {
           _id,
+
           amount,
+
           donorName,
+
           slug,
 
           "programTitle": coalesce(
             programTitle,
+
             *[
               _type == "program" &&
-              slug.current == ^.slug
+              slug.current == ^.slug &&
+              !(_id in path("drafts.**"))
             ][0].title,
+
             "Sedekah Umum / Non-Slug"
           ),
 
           "createdAt": _createdAt,
+
           paidAt
         },
 
         "withdrawals": *[
           _type == "fundraiserWithdrawal" &&
+
           !(_id in path("drafts.**")) &&
+
           (
             fundraiserPhone == $phoneInternational ||
             fundraiserPhone == $phoneLocal ||
@@ -357,10 +640,15 @@ export async function GET(request: Request) {
           )
         ]
         | order(
-          coalesce(requestedAt, _createdAt) desc
-        ) {
+            coalesce(
+              requestedAt,
+              _createdAt
+            ) desc
+          ) {
           _id,
+
           amount,
+
           status,
 
           "requestedAt": coalesce(
@@ -369,36 +657,68 @@ export async function GET(request: Request) {
           ),
 
           processedAt,
+
           paidAt,
 
           bankName,
+
           accountName,
+
           accountNumber,
 
           referenceNumber,
+
           note,
+
           adminNote
         },
 
         "programs": *[
           _type == "program" &&
+
           !(_id in path("drafts.**")) &&
-          defined(slug.current)
+
+          defined(
+            slug.current
+          )
         ]
-        | order(title asc) {
+        | order(
+            title asc
+          ) {
           title,
-          "slug": slug.current
+
+          "slug":
+            slug.current
         }
       }
     `;
 
-    // ======================================================
-    // 4. FETCH DATA SANITY
-    // ======================================================
+    // ========================================================================
+    // 4. FETCH SANITY
+    // ========================================================================
+
+    /**
+     * Jika token tersedia gunakan RAW perspective.
+     *
+     * RAW memungkinkan server melihat:
+     *
+     * - dokumen published
+     * - drafts.xxx
+     *
+     * Tanpa token, fallback hanya published.
+     */
+
+    const perspective:
+      | 'raw'
+      | 'published' =
+      SANITY_TOKEN
+        ? 'raw'
+        : 'published';
 
     const data =
-      await client.fetch<StatsQueryResult>(
+      await serverClient.fetch<StatsQueryResult>(
         query,
+
         {
           phoneInternational:
             normalized.international,
@@ -415,19 +735,29 @@ export async function GET(request: Request) {
           phoneDigits:
             normalized.digits,
         },
+
         {
-          cache: 'no-store',
+          cache:
+            'no-store',
+
+          perspective,
         }
       );
 
-    // ======================================================
-    // 5. PROFILE TIDAK DITEMUKAN
-    // ======================================================
+    // ========================================================================
+    // 5. RESOLVE PROFILE
+    // ========================================================================
 
-    if (!data?.profile) {
+    const profile =
+      resolveFundraiserProfile(
+        data?.profileCandidates
+      );
+
+    if (!profile) {
       return jsonNoStore(
         {
           success: false,
+
           message:
             'Data fundraiser tidak ditemukan.',
         },
@@ -435,263 +765,395 @@ export async function GET(request: Request) {
       );
     }
 
-    // ======================================================
-    // 6. NORMALISASI ARRAY
-    // ======================================================
+    // ========================================================================
+    // 6. NORMALIZE STATUS
+    // ========================================================================
 
-    const donations = Array.isArray(
-      data.donations
-    )
-      ? data.donations
-      : [];
+    const fundraiserStatus =
+      normalizeFundraiserStatus(
+        profile.status
+      );
 
-    const withdrawals = Array.isArray(
-      data.withdrawals
-    )
-      ? data.withdrawals
-      : [];
+    // ========================================================================
+    // 7. NORMALIZE ARRAY
+    // ========================================================================
 
-    const programs = Array.isArray(data.programs)
-      ? data.programs.filter(
-          (program) =>
-            program?.slug && program?.title
-        )
-      : [];
+    const donations =
+      Array.isArray(
+        data?.donations
+      )
+        ? data.donations
+        : [];
 
-    // ======================================================
-    // 7. HITUNG TOTAL DONASI
-    // ======================================================
+    const withdrawals =
+      Array.isArray(
+        data?.withdrawals
+      )
+        ? data.withdrawals
+        : [];
 
-    const totalEarnings = donations.reduce(
-      (sum, item) => {
-        const amount = Number(item.amount || 0);
+    const programs =
+      Array.isArray(
+        data?.programs
+      )
+        ? data.programs.filter(
+            (program) =>
+              Boolean(
+                program?.slug &&
+                  program?.title
+              )
+          )
+        : [];
 
-        if (!Number.isFinite(amount)) {
-          return sum;
-        }
+    // ========================================================================
+    // 8. TOTAL DONATION
+    // ========================================================================
 
-        return sum + amount;
-      },
-      0
-    );
+    const totalEarnings =
+      donations.reduce(
+        (
+          sum,
+          item
+        ) => {
+          const amount =
+            Number(
+              item.amount ||
+                0
+            );
 
-    // ======================================================
-    // 8. HITUNG COMMISSION RATE
-    // ======================================================
+          if (
+            !Number.isFinite(
+              amount
+            ) ||
+            amount < 0
+          ) {
+            return sum;
+          }
+
+          return (
+            sum + amount
+          );
+        },
+        0
+      );
+
+    // ========================================================================
+    // 9. COMMISSION RATE
+    // ========================================================================
 
     const commissionRate =
       normalizeCommissionRate(
-        data.profile.commissionRate
+        profile.commissionRate
       );
 
-    // ======================================================
-    // 9. TOTAL HAK KOMISI
-    // ======================================================
-
-    const totalCommission = Math.max(
-      0,
+    const commissionPercent =
       Math.round(
-        totalEarnings * commissionRate
-      )
-    );
+        commissionRate *
+          100
+      );
 
-    // ======================================================
-    // 10. HITUNG HISTORY PENARIKAN
-    // ======================================================
+    // ========================================================================
+    // 10. TOTAL COMMISSION
+    // ========================================================================
 
-    let paidFromWithdrawalHistory = 0;
-    let pendingWithdrawal = 0;
+    const totalCommission =
+      Math.max(
+        0,
 
-    for (const item of withdrawals) {
-      const amount = Number(item.amount || 0);
+        Math.round(
+          totalEarnings *
+            commissionRate
+        )
+      );
+
+    // ========================================================================
+    // 11. WITHDRAWAL TOTAL
+    // ========================================================================
+
+    let paidFromWithdrawalHistory =
+      0;
+
+    let pendingWithdrawal =
+      0;
+
+    for (
+      const item of
+      withdrawals
+    ) {
+      const amount =
+        Number(
+          item.amount || 0
+        );
 
       if (
-        !Number.isFinite(amount) ||
+        !Number.isFinite(
+          amount
+        ) ||
         amount <= 0
       ) {
         continue;
       }
 
-      const status = String(
-        item.status || ''
-      ).toLowerCase();
+      const status =
+        String(
+          item.status || ''
+        )
+          .trim()
+          .toLowerCase();
 
-      /**
-       * Sudah benar-benar dibayar
-       */
+      // SUDAH DIBAYAR
+
       if (
         status === 'paid' ||
-        status === 'completed'
+        status ===
+          'completed'
       ) {
-        paidFromWithdrawalHistory += amount;
+        paidFromWithdrawalHistory +=
+          amount;
       }
 
-      /**
-       * Pending dan approved sama-sama
-       * mengunci saldo supaya tidak bisa
-       * ditarik dua kali.
-       */
+      // SEDANG DIPROSES
+
       if (
-        status === 'pending' ||
-        status === 'approved'
+        status ===
+          'pending' ||
+        status ===
+          'approved'
       ) {
-        pendingWithdrawal += amount;
+        pendingWithdrawal +=
+          amount;
       }
     }
 
-    // ======================================================
-    // 11. SUPPORT DATA LAMA feePaid
-    // ======================================================
-    //
-    // feePaid adalah sistem lama.
-    //
-    // Jangan dijumlahkan dengan history withdrawal,
-    // karena berisiko double-count.
-    //
-    // Ambil angka TERBESAR.
-    //
-    // Contoh:
-    //
-    // feePaid = 150.000
-    // history paid = 150.000
-    //
-    // hasil tetap 150.000, bukan 300.000.
-    //
-    // ======================================================
+    // ========================================================================
+    // 12. LEGACY FEE PAID
+    // ========================================================================
 
-    const legacyFeePaid = Math.max(
-      0,
-      Number(data.profile.feePaid || 0)
-    );
+    const legacyFeePaid =
+      Math.max(
+        0,
 
-    const totalWithdrawn = Math.max(
-      legacyFeePaid,
-      paidFromWithdrawalHistory
-    );
+        Number(
+          profile.feePaid ||
+            0
+        )
+      );
 
-    // ======================================================
-    // 12. HITUNG SALDO TERSEDIA
-    // ======================================================
+    /**
+     * Jangan dijumlahkan.
+     *
+     * feePaid lama bisa saja sudah mencerminkan
+     * withdrawal history.
+     */
+    const totalWithdrawn =
+      Math.max(
+        legacyFeePaid,
 
-    const availableCommission = Math.max(
-      0,
-      totalCommission -
-        totalWithdrawn -
-        pendingWithdrawal
-    );
+        paidFromWithdrawalHistory
+      );
 
-    // ======================================================
-    // 13. MASK DATA REKENING
-    // ======================================================
+    // ========================================================================
+    // 13. AVAILABLE COMMISSION
+    // ========================================================================
+
+    const availableCommission =
+      Math.max(
+        0,
+
+        totalCommission -
+          totalWithdrawn -
+          pendingWithdrawal
+      );
+
+    // ========================================================================
+    // 14. SAFE PROFILE
+    // ========================================================================
 
     const safeProfile = {
-      ...data.profile,
+      /**
+       * Hilangkan prefix drafts.
+       *
+       * Frontend tidak perlu mengetahui
+       * apakah dokumen berasal dari drafts.xxx.
+       */
+      _id:
+        profile._id.replace(
+          /^drafts\./,
+          ''
+        ),
 
-      accountNumber: maskAccountNumber(
-        data.profile.accountNumber
-      ),
+      name:
+        profile.name ||
+        'Fundraiser',
+
+      /**
+       * Gunakan nomor international
+       * agar tracking referral konsisten.
+       */
+      phone:
+        normalizePhone(
+          profile.phone ||
+            phone
+        ).international,
+
+      /**
+       * INI YANG DIPAKAI DASHBOARD.
+       */
+      status:
+        fundraiserStatus,
+
+      feePaid:
+        Number(
+          profile.feePaid ||
+            0
+        ),
+
+      commissionRate,
+
+      programTitle:
+        profile.programTitle,
+
+      programSlug:
+        profile.programSlug,
+
+      bankName:
+        profile.bankName,
+
+      accountName:
+        profile.accountName,
+
+      accountNumber:
+        maskAccountNumber(
+          profile.accountNumber
+        ),
     };
 
-    const safeWithdrawals = withdrawals.map(
-      (item) => ({
-        ...item,
+    // ========================================================================
+    // 15. SAFE WITHDRAWALS
+    // ========================================================================
 
-        amount: Number(item.amount || 0),
+    const safeWithdrawals =
+      withdrawals.map(
+        (item) => ({
+          ...item,
 
-        accountNumber: maskAccountNumber(
-          item.accountNumber
-        ),
-      })
-    );
+          amount:
+            Number(
+              item.amount ||
+                0
+            ),
 
-    // ======================================================
-    // 14. RESPONSE
-    // ======================================================
+          status:
+            String(
+              item.status ||
+                'pending'
+            )
+              .trim()
+              .toLowerCase(),
+
+          accountNumber:
+            maskAccountNumber(
+              item.accountNumber
+            ),
+        })
+      );
+
+    // ========================================================================
+    // 16. RESPONSE
+    // ========================================================================
 
     return jsonNoStore({
       success: true,
 
-      // ====================================================
+      // ----------------------------------------------------------------------
       // PROFILE
-      // ====================================================
+      // ----------------------------------------------------------------------
 
-      profile: safeProfile,
+      profile:
+        safeProfile,
 
-      // ====================================================
-      // DONATION STATS
-      // ====================================================
+      // ----------------------------------------------------------------------
+      // STATUS
+      // ----------------------------------------------------------------------
+
+      status:
+        fundraiserStatus,
+
+      isApproved:
+        fundraiserStatus ===
+        'approved',
+
+      // ----------------------------------------------------------------------
+      // DONATION
+      // ----------------------------------------------------------------------
 
       totalEarnings,
 
-      donationCount: donations.length,
+      donationCount:
+        donations.length,
 
-      history: donations,
+      history:
+        donations,
 
-      // ====================================================
+      // ----------------------------------------------------------------------
       // COMMISSION
-      // ====================================================
+      // ----------------------------------------------------------------------
 
       commissionRate,
 
-      commissionPercent: Math.round(
-        commissionRate * 100
-      ),
+      commissionPercent,
 
       totalCommission,
 
-      // Yang benar-benar sudah dibayar
+      // ----------------------------------------------------------------------
+      // WITHDRAWAL
+      // ----------------------------------------------------------------------
+
       totalWithdrawn,
 
-      // Sedang pending / approved
       pendingWithdrawal,
 
-      // Yang masih boleh diajukan
       availableCommission,
 
-      // ====================================================
-      // WITHDRAWAL HISTORY
-      // ====================================================
-
-      withdrawals: safeWithdrawals,
+      withdrawals:
+        safeWithdrawals,
 
       withdrawalCount:
         safeWithdrawals.length,
 
-      // ====================================================
-      // KONFIGURASI PENARIKAN
-      // ====================================================
+      // ----------------------------------------------------------------------
+      // WITHDRAW CONFIG
+      // ----------------------------------------------------------------------
 
       withdrawalConfig: {
-        enabled: WITHDRAWAL_ENABLED,
+        enabled:
+          WITHDRAWAL_ENABLED,
 
-        minimum: MINIMUM_WITHDRAWAL,
+        minimum:
+          MINIMUM_WITHDRAWAL,
 
-        /**
-         * Maksimal nominal yang boleh
-         * diajukan saat ini.
-         */
-        maximum: availableCommission,
+        maximum:
+          availableCommission,
       },
 
-      // ====================================================
+      // ----------------------------------------------------------------------
       // PROGRAM
-      // ====================================================
+      // ----------------------------------------------------------------------
 
       programs,
     });
-  } catch (error: unknown) {
+  } catch (
+    error: unknown
+  ) {
     console.error(
       '🔥 API Fundraiser Stats Error:',
       error
     );
 
-    /**
-     * Jangan kirim detail error server
-     * ke browser pada production.
-     */
     return jsonNoStore(
       {
         success: false,
+
         message:
           'Terjadi kesalahan saat mengambil data fundraiser.',
       },
