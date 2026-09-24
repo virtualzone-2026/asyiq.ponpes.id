@@ -12,11 +12,11 @@ export const dynamic = 'force-dynamic';
 
 // 🚀 BYPASS CLIENT: Menggunakan token tulis/baca rahasia agar kebal dari delay cache/CDN Sanity
 const serverMetadataClient = createClient({
-  projectId: '61d8vnuq',
+  projectId: 'lsnco71s',
   dataset: 'production',
   useCdn: false, // Wajib false agar datanya langsung ditarik real-time dari master database
   apiVersion: '2024-01-01',
-  token: 'sk44JM4AlD6urcLa9Ak9vvnRpLGlsRai9aftW1wPA4w9zxwhrCpKREk2ArKU25K4kENIPxVXenu4kZhm2cOSaxGP69kz8az2qM2BZDIVzqyAGLjIvVTGKMu39CExUrKwbw2wCb2bfxKPgZ4lqEt2nwLZT4HEc4XT1qfrZ0i6KYupIlT6IOlP',
+  token: 'skOF6YFJx8LIu5AFv5aivLK4nCpco1gA7D3Z9Vh50gBkx6mH6P9PYNULsunZWCU719cpxfJWVJb62pE6EUQrhg1WrloEvpiQOmJqBTnlGLeQuz8x0rivMeOVBynRqvzELsSvEu6LnHImrYrdf2Skp1feDHUnQB0TJjIYGVBl9MkIYoIMe6h0',
 });
 
 // ===================================================================
@@ -25,12 +25,12 @@ const serverMetadataClient = createClient({
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   
-  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.lazisku.com';
+  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
   if (!siteUrl.includes('www.')) {
     siteUrl = siteUrl.replace('https://', 'https://www.');
   }
   
-  let campaignTitle = 'Sedekah Subuh | LAZIS Khoiro Ummah';
+  let campaignTitle = 'Sedekah Subuh | Asyiqul Quran';
   let campaignDesc = 'Awali hari dengan keberkahan. Sedekah subuh adalah waktu terbaik untuk berbagi kebaikan.'; 
   let imageUrl = '';
 
@@ -88,7 +88,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       title: campaignTitle,
       description: campaignDesc,
       url: `${siteUrl}/campaign/${slug}`,
-      siteName: 'LAZIS Khoiro Ummah',
+      siteName: 'Asyiqul Quran',
       locale: 'id_ID',
       type: 'article', // Tetap gunakan tipe artikel karena terbukti sukses meloloskan halaman berita
       images: [

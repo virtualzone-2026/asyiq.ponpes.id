@@ -22,7 +22,7 @@ const PONDOK_NAME = "Pondok Pesantren 'Aasyiqul Qur'an";
 const sanityClient = createClient({
   projectId:
     process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ||
-    '19a8r8sr',
+    'lsnco71s',
 
   dataset:
     process.env.NEXT_PUBLIC_SANITY_DATASET ||

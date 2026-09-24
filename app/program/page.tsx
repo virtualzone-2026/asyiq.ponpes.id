@@ -12,7 +12,7 @@ export const revalidate = 0;
 async function getProgramsData() {
   try {
     // Memanggil API route programs lokal dengan menyuntikkan timestamp untuk mematikan cache di tingkat server cdn
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://www.asyiq.ponpes.id';
     const res = await fetch(`${baseUrl}/api/programs?v=${Date.now()}`, {
       cache: 'no-store',
       headers: {
