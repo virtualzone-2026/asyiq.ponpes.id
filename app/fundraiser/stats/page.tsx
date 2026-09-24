@@ -1,6 +1,6 @@
 'use client';
 
-import React, { FormEvent, useMemo, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   Banknote,
@@ -15,6 +15,7 @@ import {
   Landmark,
   Link2,
   LoaderCircle,
+  LogOut,
   Percent,
   RefreshCw,
   Share2,
@@ -31,6 +32,11 @@ import {
 
 const SITE_NAME = 'Asyiqul Quran';
 const SITE_URL = 'https://www.asyiq.ponpes.id';
+
+// Session hanya disimpan selama tab/browser session aktif.
+// sessionStorage tetap bertahan saat refresh, tetapi akan hilang ketika
+// sesi browser ditutup sehingga lebih aman daripada localStorage.
+const FUNDRAISER_SESSION_KEY = 'asyiq_fundraiser_phone';
 
 // ==========================================================
 // TYPES
@@ -225,6 +231,10 @@ const getWithdrawalStatus = (status?: WithdrawalStatus) => {
 export default function FundraiserStatsPage() {
   const [phone, setPhone] = useState('');
 
+  // Mencegah form "login" muncul sesaat saat halaman direfresh.
+  // Setelah sessionStorage diperiksa, nilai ini berubah menjadi true.
+  const [sessionReady, setSessionReady] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<FundraiserStats | null>(null);
   const [error, setError] = useState('');
@@ -257,7 +267,7 @@ export default function FundraiserStatsPage() {
   // LOAD FUNDRAISER VIEWS FROM SUPABASE
   // ========================================================
 
-  const loadFundraiserViews = async (referralKey: string) => {
+  const loadFundraiserViews = useCallback(async (referralKey: string) => {
     const key = normalizeReferralPhone(referralKey);
 
     if (!key) {
@@ -304,78 +314,181 @@ export default function FundraiserStatsPage() {
     } finally {
       setViewsLoading(false);
     }
-  };
+  }, []);
 
   // ========================================================
   // LOAD STATS
   // ========================================================
 
-  const loadStats = async (rawPhone: string) => {
-    const cleanedPhone = cleanPhoneNumber(rawPhone);
+  const loadStats = useCallback(
+    async (rawPhone: string): Promise<boolean> => {
+      const cleanedPhone =
+        normalizeReferralPhone(rawPhone) ||
+        cleanPhoneNumber(rawPhone);
 
-    if (!cleanedPhone) return;
+      if (!cleanedPhone) {
+        setStats(null);
+        setFundraiserViews(0);
+        setError('Nomor WhatsApp fundraiser tidak valid.');
+        return false;
+      }
 
-    setLoading(true);
-    setError('');
+      setLoading(true);
+      setError('');
 
-    try {
-      const res = await fetch(
-        `/api/fundraiser/stats?phone=${encodeURIComponent(
-          cleanedPhone
-        )}`,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
-          cache: 'no-store',
+      try {
+        const res = await fetch(
+          `/api/fundraiser/stats?phone=${encodeURIComponent(
+            cleanedPhone
+          )}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+            },
+            cache: 'no-store',
+          }
+        );
+
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok || !json?.success) {
+          setStats(null);
+          setFundraiserViews(0);
+
+          setError(
+            json?.message ||
+              'Data fundraiser tidak berhasil ditemukan.'
+          );
+
+          return false;
         }
-      );
 
-      const json = await res.json().catch(() => ({}));
+        setStats(json);
 
-      if (!res.ok || !json?.success) {
+        // Gunakan nomor pada profil sebagai sumber utama agar referral key
+        // selalu konsisten dalam format 62xxxxxxxxxx.
+        const canonicalPhone =
+          normalizeReferralPhone(
+            json?.profile?.phone || cleanedPhone
+          ) || cleanedPhone;
+
+        setPhone(canonicalPhone);
+
+        // Simpan sesi hanya setelah data fundraiser benar-benar valid.
+        // sessionStorage bertahan saat refresh tetapi tidak permanen.
+        try {
+          window.sessionStorage.setItem(
+            FUNDRAISER_SESSION_KEY,
+            canonicalPhone
+          );
+        } catch (storageError) {
+          console.warn(
+            `[${SITE_NAME}] Session fundraiser tidak dapat disimpan:`,
+            storageError
+          );
+        }
+
+        await loadFundraiserViews(canonicalPhone);
+
+        return true;
+      } catch (err) {
+        console.error(
+          `[${SITE_NAME}] Gagal memuat dashboard fundraiser:`,
+          err
+        );
+
         setStats(null);
         setFundraiserViews(0);
 
         setError(
-          json?.message ||
-            'Data fundraiser tidak berhasil ditemukan.'
+          'Terjadi gangguan jaringan saat memuat data fundraiser.'
         );
 
-        return;
+        return false;
+      } finally {
+        setLoading(false);
       }
+    },
+    [loadFundraiserViews]
+  );
 
-      setStats(json);
+  // ========================================================
+  // RESTORE SESSION SETELAH REFRESH
+  // ========================================================
 
-      // Gunakan nomor yang tersimpan di profil sebagai referral key utama.
-      // Jika API belum mengembalikan phone, gunakan nomor yang dimasukkan user.
-      const referralKey = normalizeReferralPhone(
-        json?.profile?.phone || cleanedPhone
-      );
+  useEffect(() => {
+    let active = true;
 
-      await loadFundraiserViews(referralKey);
-    } catch (err) {
-      console.error(
-        `[${SITE_NAME}] Gagal memuat dashboard fundraiser:`,
-        err
-      );
+    async function restoreFundraiserSession() {
+      try {
+        const savedPhone =
+          window.sessionStorage.getItem(
+            FUNDRAISER_SESSION_KEY
+          );
 
-      setStats(null);
-      setFundraiserViews(0);
+        if (!savedPhone) {
+          return;
+        }
 
-      setError(
-        'Terjadi gangguan jaringan saat memuat data fundraiser.'
-      );
-    } finally {
-      setLoading(false);
+        setPhone(savedPhone);
+
+        const success =
+          await loadStats(savedPhone);
+
+        // Bila nomor yang tersimpan sudah tidak valid / fundraiser dihapus,
+        // hapus sesi agar pengguna dapat memasukkan nomor kembali.
+        if (!success) {
+          window.sessionStorage.removeItem(
+            FUNDRAISER_SESSION_KEY
+          );
+
+          if (active) {
+            setPhone('');
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[${SITE_NAME}] Gagal memulihkan session fundraiser:`,
+          err
+        );
+
+        try {
+          window.sessionStorage.removeItem(
+            FUNDRAISER_SESSION_KEY
+          );
+        } catch {
+          // Abaikan error storage pada browser yang memblokir storage.
+        }
+      } finally {
+        if (active) {
+          setSessionReady(true);
+        }
+      }
     }
-  };
+
+    restoreFundraiserSession();
+
+    return () => {
+      active = false;
+    };
+  }, [loadStats]);
+
+  // ========================================================
+  // OPEN DASHBOARD MANUAL
+  // ========================================================
 
   const handleCheckStats = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!phone) return;
+    const cleanedPhone =
+      normalizeReferralPhone(phone) ||
+      cleanPhoneNumber(phone);
+
+    if (!cleanedPhone) {
+      setError('Masukkan nomor WhatsApp fundraiser yang valid.');
+      return;
+    }
 
     setSelectedSlug('');
     setCopied(false);
@@ -384,7 +497,34 @@ export default function FundraiserStatsPage() {
     setWithdrawError('');
     setFundraiserViews(0);
 
-    await loadStats(phone);
+    await loadStats(cleanedPhone);
+  };
+
+  // ========================================================
+  // LOGOUT / GANTI AKUN
+  // ========================================================
+
+  const handleLogout = () => {
+    try {
+      window.sessionStorage.removeItem(
+        FUNDRAISER_SESSION_KEY
+      );
+    } catch {
+      // Abaikan bila browser memblokir sessionStorage.
+    }
+
+    setPhone('');
+    setStats(null);
+    setError('');
+    setFundraiserViews(0);
+    setSelectedSlug('');
+    setCopied(false);
+    setActiveTab('donations');
+    setShowWithdrawal(false);
+    setWithdrawAmount('');
+    setWithdrawNote('');
+    setWithdrawMessage('');
+    setWithdrawError('');
   };
 
   // ========================================================
@@ -660,80 +800,109 @@ export default function FundraiserStatsPage() {
             </div>
 
             {stats && (
-              <button
-                type="button"
-                onClick={() => loadStats(phone)}
-                disabled={loading}
-                className="flex h-10 items-center justify-center gap-2 border border-gray-200 bg-white px-4 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                <RefreshCw
-                  size={14}
-                  className={
-                    loading ? 'animate-spin' : ''
-                  }
-                />
-                Refresh
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => loadStats(phone)}
+                  disabled={loading}
+                  className="flex h-10 items-center justify-center gap-2 border border-gray-200 bg-white px-4 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={14}
+                    className={
+                      loading ? 'animate-spin' : ''
+                    }
+                  />
+                  Refresh
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loading}
+                  className="flex h-10 items-center justify-center gap-2 border border-red-200 bg-white px-4 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  <LogOut size={14} />
+                  Keluar
+                </button>
+              </div>
             )}
           </div>
         </div>
 
         {/* ==================================================
-            SEARCH
+            SESSION / SEARCH
         ================================================== */}
 
-        <div className="mb-5 border border-gray-200 bg-white p-5 md:p-6">
-          <form
-            onSubmit={handleCheckStats}
-            className="flex flex-col gap-3 md:flex-row md:items-end"
-          >
-            <div className="flex-1">
-              <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">
-                Nomor WhatsApp Fundraiser
-              </label>
-
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                required
-                placeholder="Contoh: 08123456789"
-                value={phone}
-                onChange={(e) =>
-                  setPhone(e.target.value)
-                }
-                className="h-11 w-full border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:bg-white"
+        {!sessionReady ? (
+          <div className="mb-5 border border-gray-200 bg-white p-6">
+            <div className="flex items-center justify-center gap-3 py-5 text-sm font-semibold text-gray-500">
+              <LoaderCircle
+                size={18}
+                className="animate-spin text-emerald-600"
               />
+              Memulihkan sesi fundraiser...
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex h-11 items-center justify-center gap-2 bg-emerald-600 px-6 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-700 disabled:bg-gray-300"
+          </div>
+        ) : !stats ? (
+          <div className="mb-5 border border-gray-200 bg-white p-5 md:p-6">
+            <form
+              onSubmit={handleCheckStats}
+              className="flex flex-col gap-3 md:flex-row md:items-end"
             >
-              {loading ? (
-                <>
-                  <LoaderCircle
-                    size={15}
-                    className="animate-spin"
-                  />
-                  Memuat
-                </>
-              ) : (
-                <>
-                  Lihat Dashboard
-                  <ArrowUpRight size={15} />
-                </>
-              )}
-            </button>
-          </form>
+              <div className="flex-1">
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">
+                  Nomor WhatsApp Fundraiser
+                </label>
 
-          {error && (
-            <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  placeholder="Contoh: 08123456789"
+                  value={phone}
+                  onChange={(e) =>
+                    setPhone(e.target.value)
+                  }
+                  className="h-11 w-full border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex h-11 items-center justify-center gap-2 bg-emerald-600 px-6 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-700 disabled:bg-gray-300"
+              >
+                {loading ? (
+                  <>
+                    <LoaderCircle
+                      size={15}
+                      className="animate-spin"
+                    />
+                    Memuat
+                  </>
+                ) : (
+                  <>
+                    Lihat Dashboard
+                    <ArrowUpRight size={15} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {error && (
+              <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                {error}
+              </div>
+            )}
+
+            <p className="mt-3 text-[10px] leading-relaxed text-gray-400">
+              Setelah berhasil masuk, sesi dashboard akan tetap aktif saat
+              halaman direfresh selama sesi browser ini belum ditutup.
+            </p>
+          </div>
+        ) : null}
 
         {stats && (
           <div className="space-y-5">
