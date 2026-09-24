@@ -230,6 +230,78 @@ function calculatePercentage(
 // ============================================================================
 
 const portableTextComponents = {
+  // ==========================================================================
+  // BLOCK / PARAGRAF
+  // ==========================================================================
+
+  block: {
+    normal: ({ children }: any) => (
+      <p className="mb-5 last:mb-0 leading-7 md:leading-8">
+        {children}
+      </p>
+    ),
+
+    h2: ({ children }: any) => (
+      <h2 className="mt-8 mb-4 text-xl md:text-2xl font-black text-gray-900 leading-tight">
+        {children}
+      </h2>
+    ),
+
+    h3: ({ children }: any) => (
+      <h3 className="mt-7 mb-3 text-lg md:text-xl font-black text-gray-900 leading-tight">
+        {children}
+      </h3>
+    ),
+
+    h4: ({ children }: any) => (
+      <h4 className="mt-6 mb-3 text-base md:text-lg font-black text-gray-900 leading-tight">
+        {children}
+      </h4>
+    ),
+
+    blockquote: ({ children }: any) => (
+      <blockquote className="my-6 border-l-4 border-emerald-500 pl-4 italic text-gray-600 leading-7">
+        {children}
+      </blockquote>
+    ),
+  },
+
+  // ==========================================================================
+  // LIST
+  // ==========================================================================
+
+  list: {
+    bullet: ({ children }: any) => (
+      <ul className="my-5 list-disc space-y-2 pl-6">
+        {children}
+      </ul>
+    ),
+
+    number: ({ children }: any) => (
+      <ol className="my-5 list-decimal space-y-2 pl-6">
+        {children}
+      </ol>
+    ),
+  },
+
+  listItem: {
+    bullet: ({ children }: any) => (
+      <li className="pl-1 leading-7">
+        {children}
+      </li>
+    ),
+
+    number: ({ children }: any) => (
+      <li className="pl-1 leading-7">
+        {children}
+      </li>
+    ),
+  },
+
+  // ==========================================================================
+  // IMAGE
+  // ==========================================================================
+
   types: {
     image: ({
       value,
@@ -795,18 +867,35 @@ export default function BlogDetailClient({
               ARTICLE CONTENT
               ================================================================= */}
 
-          <div className="text-gray-700 text-base leading-relaxed font-normal tracking-wide py-4 border-b border-gray-100 prose prose-emerald max-w-none w-full dynamic-portable-text">
+          <div className="text-gray-700 text-[15px] md:text-base leading-7 md:leading-8 font-normal tracking-[0.01em] py-4 border-b border-gray-100 max-w-none w-full dynamic-portable-text">
 
             {article.content ? (
 
-              <PortableText
-                value={
-                  article.content
-                }
-                components={
-                  portableTextComponents
-                }
-              />
+              typeof article.content === 'string' ? (
+
+                <div className="space-y-5">
+                  {article.content
+                    .split(/\n\s*\n/)
+                    .map((paragraph: string) => paragraph.trim())
+                    .filter(Boolean)
+                    .map((paragraph: string, index: number) => (
+                      <p
+                        key={`paragraph-${index}`}
+                        className="leading-7 md:leading-8"
+                      >
+                        {paragraph}
+                      </p>
+                    ))}
+                </div>
+
+              ) : (
+
+                <PortableText
+                  value={article.content}
+                  components={portableTextComponents}
+                />
+
+              )
 
             ) : (
 

@@ -57,6 +57,51 @@ function safeMoney(value: unknown): number {
 // ============================================================================
 
 const portableTextComponents = {
+  // ==========================================================================
+  // BLOCK / PARAGRAF
+  // ==========================================================================
+  //
+  // PortableText tidak otomatis memberi jarak yang cukup jika style prose
+  // tertimpa oleh CSS lain. Karena itu margin paragraf dibuat eksplisit.
+  //
+  // ==========================================================================
+
+  block: {
+    normal: ({ children }: any) => (
+      <p className="mb-5 last:mb-0 leading-7 md:leading-8">
+        {children}
+      </p>
+    ),
+
+    h2: ({ children }: any) => (
+      <h2 className="mt-8 mb-4 text-xl md:text-2xl font-black leading-tight text-gray-900">
+        {children}
+      </h2>
+    ),
+
+    h3: ({ children }: any) => (
+      <h3 className="mt-7 mb-3 text-lg md:text-xl font-black leading-tight text-gray-900">
+        {children}
+      </h3>
+    ),
+
+    h4: ({ children }: any) => (
+      <h4 className="mt-6 mb-3 text-base md:text-lg font-black leading-tight text-gray-900">
+        {children}
+      </h4>
+    ),
+
+    blockquote: ({ children }: any) => (
+      <blockquote className="my-6 border-l-4 border-emerald-500 pl-4 italic leading-7 text-gray-600">
+        {children}
+      </blockquote>
+    ),
+  },
+
+  // ==========================================================================
+  // IMAGE
+  // ==========================================================================
+
   types: {
     image: ({ value }: any) => {
       const imageUrl =
@@ -81,7 +126,7 @@ const portableTextComponents = {
           : '';
 
       return (
-        <figure className="my-6 space-y-2 w-full">
+        <figure className="my-7 space-y-2 w-full">
 
           <div className="overflow-hidden bg-gray-50 border border-gray-100 shadow-sm aspect-[16/9]">
 
@@ -109,7 +154,55 @@ const portableTextComponents = {
     },
   },
 
+  // ==========================================================================
+  // LIST
+  // ==========================================================================
+
+  list: {
+    bullet: ({ children }: any) => (
+      <ul className="my-5 list-disc space-y-2 pl-6">
+        {children}
+      </ul>
+    ),
+
+    number: ({ children }: any) => (
+      <ol className="my-5 list-decimal space-y-2 pl-6">
+        {children}
+      </ol>
+    ),
+  },
+
+  listItem: {
+    bullet: ({ children }: any) => (
+      <li className="pl-1 leading-7">
+        {children}
+      </li>
+    ),
+
+    number: ({ children }: any) => (
+      <li className="pl-1 leading-7">
+        {children}
+      </li>
+    ),
+  },
+
+  // ==========================================================================
+  // MARKS
+  // ==========================================================================
+
   marks: {
+    strong: ({ children }: any) => (
+      <strong className="font-extrabold text-gray-800">
+        {children}
+      </strong>
+    ),
+
+    em: ({ children }: any) => (
+      <em className="italic">
+        {children}
+      </em>
+    ),
+
     link: ({
       children,
       value,
@@ -140,7 +233,7 @@ const portableTextComponents = {
               ? undefined
               : 'noopener noreferrer'
           }
-          className="text-emerald-600 font-bold hover:underline"
+          className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
         >
           {children}
         </a>
@@ -1585,17 +1678,38 @@ export default function CampaignDetailClient({
 
                 {/* DESCRIPTION */}
 
-                <div className="text-gray-700 text-base leading-relaxed font-normal tracking-wide dynamic-portable-text prose prose-emerald max-w-none">
+                <div className="dynamic-portable-text max-w-none text-[15px] md:text-base font-normal tracking-[0.01em] text-gray-700">
 
                   {program.description ? (
                     typeof program.description ===
                     'string' ? (
-                      <p>
-                        {
-                          program.description
-                        }
-                      </p>
+
+                      <div className="space-y-5">
+
+                        {program.description
+                          .split(/\n\s*\n/)
+                          .map((paragraph: string) =>
+                            paragraph.trim()
+                          )
+                          .filter(Boolean)
+                          .map(
+                            (
+                              paragraph: string,
+                              index: number
+                            ) => (
+                              <p
+                                key={`paragraph-${index}`}
+                                className="leading-7 md:leading-8"
+                              >
+                                {paragraph}
+                              </p>
+                            )
+                          )}
+
+                      </div>
+
                     ) : (
+
                       <PortableText
                         value={
                           program.description
@@ -1604,12 +1718,14 @@ export default function CampaignDetailClient({
                           portableTextComponents
                         }
                       />
+
                     )
                   ) : (
+
                     <p className="text-gray-400 italic text-xs">
-                      Belum ada
-                      cerita detail.
+                      Belum ada cerita detail.
                     </p>
+
                   )}
 
                 </div>
