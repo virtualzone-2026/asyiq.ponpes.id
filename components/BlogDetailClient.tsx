@@ -15,7 +15,7 @@ const portableTextComponents = {
           <div className="rounded-none overflow-hidden bg-gray-50 border border-gray-100 shadow-sm aspect-[16/9] md:aspect-[21/9]">
             <img 
               src={value.asset.url} 
-              alt={typeof value.alt === 'string' ? value.alt : 'Lazisku News Gambar'} 
+              alt={typeof value.alt === 'string' ? value.alt : 'Asyiq News Gambar'} 
               className="w-full h-full object-cover"
             />
           </div>
@@ -118,7 +118,7 @@ export default function BlogDetailClient({ slug }: BlogDetailClientProps) {
 
           {/* Meta Data */}
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 border-b border-gray-100 pb-4 font-semibold w-full">
-            <span className="text-gray-700">Oleh: <strong className="text-emerald-600 font-black">Tim Media Lazisku</strong></span>
+            <span className="text-gray-700">Oleh: <strong className="text-emerald-600 font-black">Admin Asyiqul Quran</strong></span>
             <span className="hidden sm:inline text-gray-300">•</span>
             <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-none text-[10px] font-bold uppercase">
               {categoryString}
