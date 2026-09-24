@@ -4,6 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { PortableText } from '@portabletext/react';
 
 // ===================================================================
+// IDENTITAS WEBSITE
+// ===================================================================
+const SITE_NAME = 'asyiq.ponpes.id';
+
+const normalizePhone = (value: string) => value.replace(/[^0-9]/g, '');
+const isValidPhone = (value: string) => {
+  const phone = normalizePhone(value);
+  return !phone || (phone.length >= 9 && phone.length <= 15);
+};
+
+// ===================================================================
 // IN-LINE WIDGET KALKULATOR ZAKAT (SUDUT SIKU / ROUNDED-NONE)
 // ===================================================================
 function EmbeddedZakatCalculator({ onApplyAmount }: { onApplyAmount: (val: string) => void }) {
@@ -137,9 +148,17 @@ const DonationFormFields = ({
         <input type="text" placeholder="Minimal 1.000" className="w-full border border-gray-200 rounded-none pl-9 pr-3.5 py-2.5 text-xs font-bold text-gray-800 focus:outline-emerald-500" value={amount} onChange={handleAmountChange} />
       </div>
     </div>
-    <button onClick={handleDonate} disabled={submitting} className="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-none transition text-xs uppercase tracking-widest hover:bg-emerald-700 disabled:bg-gray-300 shadow-md shadow-emerald-100">
+    <button
+      type="button"
+      onClick={handleDonate}
+      disabled={submitting}
+      className="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-none transition text-xs uppercase tracking-widest hover:bg-emerald-700 disabled:bg-gray-300 shadow-md shadow-emerald-100"
+    >
       {submitting ? 'Memproses...' : 'Tunaikan Sekarang 🚀'}
     </button>
+    <p className="text-[9px] leading-relaxed text-center text-gray-400">
+      Transaksi donasi diproses melalui <span className="font-bold text-gray-500">{SITE_NAME}</span>.
+    </p>
   </div>
 );
 
@@ -161,21 +180,41 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
   const [fundraiserSubmitting, setFundraiserSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('/api/programs', {
-      cache: 'default'
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          const found = json.data.find((p: any) => p.slug === slug);
-          setProgram(found);
+    const controller = new AbortController();
+
+    const loadProgram = async () => {
+      setLoading(true);
+
+      try {
+        const res = await fetch('/api/programs', {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Gagal mengambil program. HTTP ${res.status}`);
         }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Fetch detail campaign error:', err);
-        setLoading(false);
-      });
+
+        const json = await res.json();
+        const data = Array.isArray(json?.data) ? json.data : [];
+        const found = data.find((p: any) => p?.slug === slug) ?? null;
+
+        setProgram(json?.success ? found : null);
+      } catch (err) {
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error(`[${SITE_NAME}] Fetch detail campaign error:`, err);
+          setProgram(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProgram();
+
+    return () => controller.abort();
   }, [slug]);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,34 +224,49 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
 
   const handleDonate = async () => {
     const cleanAmount = amount.replace(/\./g, '');
-    if (!cleanAmount || Number(cleanAmount) < 1000) {
-      alert('Masukkan nominal minimal Rp 1.000 gaes!');
+    const numericAmount = Number(cleanAmount);
+
+    if (!cleanAmount || !Number.isFinite(numericAmount) || numericAmount < 1000) {
+      alert('Masukkan nominal minimal Rp 1.000.');
+      return;
+    }
+
+    if (!isValidPhone(donorPhone)) {
+      alert('Nomor WhatsApp tidak valid. Gunakan 9–15 digit angka.');
+      return;
+    }
+
+    if (!program?.slug) {
+      alert('Data program belum siap. Silakan muat ulang halaman.');
       return;
     }
 
     setSubmitting(true);
+
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slug: program.slug,
-          amount: cleanAmount,
+          amount: numericAmount,
           donorName: donorName.trim() || 'Hamba Allah',
-          donorPhone: donorPhone.trim(), 
-          paymentMethod: paymentMethod,
-          referral: referral,
+          donorPhone: normalizePhone(donorPhone),
+          paymentMethod,
+          referral: referral || null,
         }),
       });
 
-      const json = await res.json();
-      if (json.success && json.paymentUrl) {
-        window.location.href = json.paymentUrl;
-      } else {
-        alert(json.error || 'Gagal memproses tautan pembayaran dari Pakasir.');
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.success || !json?.paymentUrl) {
+        throw new Error(json?.error || json?.message || 'Gagal membuat tautan pembayaran.');
       }
+
+      window.location.assign(json.paymentUrl);
     } catch (err) {
-      alert('Terjadi kesalahan koneksi saat menghubungi server pembayaran.');
+      console.error(`[${SITE_NAME}] Checkout error:`, err);
+      alert(err instanceof Error ? err.message : 'Terjadi kesalahan saat memproses pembayaran.');
     } finally {
       setSubmitting(false);
     }
@@ -220,41 +274,76 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
 
   const handleRegisterFundraiser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fundraiserData.name || !fundraiserData.phone) return alert('Mohon isi nama dan nomor WhatsApp Anda.');
+
+    const name = fundraiserData.name.trim();
+    const phone = normalizePhone(fundraiserData.phone);
+
+    if (!name || !phone) {
+      alert('Mohon isi nama dan nomor WhatsApp Anda.');
+      return;
+    }
+
+    if (phone.length < 9 || phone.length > 15) {
+      alert('Nomor WhatsApp tidak valid. Gunakan 9–15 digit angka.');
+      return;
+    }
+
+    const programId = program?._id || program?.id;
+    if (!programId) {
+      alert('ID program tidak ditemukan. Silakan muat ulang halaman.');
+      return;
+    }
 
     setFundraiserSubmitting(true);
+
     try {
       const res = await fetch('/api/fundraiser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: fundraiserData.name,
-          phone: fundraiserData.phone,
-          programId: program._id || program.id,
+          name,
+          phone,
+          programId,
         }),
       });
 
-      const json = await res.json();
-      if (json.success) {
-        alert('Pendaftaran berhasil! Silakan periksa pesan konfirmasi verifikasi yang dikirim via WhatsApp.');
-        setFundraiserData({ name: '', phone: '' });
-        setIsFundraiserModalOpen(false);
-      } else {
-        alert(`Gagal mengirim pengajuan: ${json.message}`);
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || json?.error || 'Gagal mengirim pengajuan fundraiser.');
       }
+
+      alert(`Pendaftaran fundraiser ${SITE_NAME} berhasil. Silakan periksa WhatsApp untuk informasi berikutnya.`);
+      setFundraiserData({ name: '', phone: '' });
+      setIsFundraiserModalOpen(false);
     } catch (err) {
-      console.error('🔥 Error submit fundraiser:', err);
-      alert('Terjadi gangguan jaringan saat memproses pendaftaran.');
+      console.error(`[${SITE_NAME}] Error submit fundraiser:`, err);
+      alert(err instanceof Error ? err.message : 'Terjadi gangguan saat memproses pendaftaran.');
     } finally {
       setFundraiserSubmitting(false);
     }
   };
 
-  if (loading) return <div className="text-center py-20 text-gray-500 font-medium">Memuat detail program...</div>;
-  if (!program) return <div className="text-center py-20 text-red-500 font-medium">Program tidak ditemukan.</div>;
+  if (loading) {
+    return (
+      <div className="text-center py-20 text-gray-500 font-medium">
+        Memuat detail program {SITE_NAME}...
+      </div>
+    );
+  }
 
-  const rawTarget = program.targetAmount || 50000000;
-  const percentage = Math.min(Math.round((program.collectedRaw / rawTarget) * 100), 100);
+  if (!program) {
+    return (
+      <div className="text-center py-20 text-red-500 font-medium">
+        Program tidak ditemukan atau gagal dimuat.
+      </div>
+    );
+  }
+
+  const rawTarget = Math.max(Number(program.targetAmount) || 50_000_000, 1);
+  const collectedRaw = Math.max(Number(program.collectedRaw) || 0, 0);
+  const percentage = Math.min(Math.max(Math.round((collectedRaw / rawTarget) * 100), 0), 100);
+  const isZakatProgram = String(program.category || '').toUpperCase() === 'ZAKAT';
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 md:px-16 pb-36 lg:pb-8">
@@ -262,6 +351,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
         
         <div className="lg:col-span-2 space-y-5 flex flex-col">
           <div className="text-left">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.18em] mb-2">{SITE_NAME}</p>
             <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-none uppercase tracking-wider">
               {program.category || 'Kebaikan'}
             </span>
@@ -289,7 +379,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
           <div className="bg-transparent py-2 w-full text-left">
             {activeTab === 'cerita' && (
               <div className="space-y-6">
-                {program.category?.toUpperCase() === 'ZAKAT' && (
+                {isZakatProgram && (
                   <div className="bg-emerald-50/40 p-1 border border-dashed border-emerald-600/30">
                     <p className="text-[11px] font-black text-emerald-800 uppercase tracking-widest px-4 pt-3">🧮 Simulasi Kalkulator Zakat Digital</p>
                     <EmbeddedZakatCalculator onApplyAmount={(val) => setAmount(val)} />
@@ -342,7 +432,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
         {/* SIDEBAR FORM & AKSI (DESKTOP) */}
         <div className="hidden lg:block bg-white rounded-none p-6 shadow-sm border border-gray-100 h-fit lg:sticky lg:top-24">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-left">Dana Terkumpul</p>
-          <p className="text-3xl font-black text-emerald-600 mt-1 text-left">{`Rp ${Number(program.collectedRaw || 0).toLocaleString('id-ID')}`}</p>
+          <p className="text-3xl font-black text-emerald-600 mt-1 text-left">{`Rp ${collectedRaw.toLocaleString('id-ID')}`}</p>
           <p className="text-[11px] text-gray-400 mt-0.5 font-medium text-left">Target Rp {rawTarget.toLocaleString('id-ID')}</p>
           <div className="w-full bg-gray-100 h-2 rounded-none mt-4 overflow-hidden">
             <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${percentage}%` }}></div>
@@ -384,7 +474,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
           <div className="flex flex-col">
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Terkumpul</span>
             <span className="text-lg font-black text-emerald-600 leading-tight">
-              {`Rp ${Number(program.collectedRaw || 0).toLocaleString('id-ID')}`}
+              {`Rp ${collectedRaw.toLocaleString('id-ID')}`}
             </span>
           </div>
           <div className="flex flex-col text-right">
@@ -432,7 +522,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
           <div className="relative w-full bg-white rounded-none p-6 space-y-4 max-h-[85vh] overflow-y-auto z-10">
             <div className="w-12 h-1 bg-gray-200 rounded-none mx-auto mb-2" onClick={() => setIsMobileFormOpen(false)} />
             <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-              <h3 className="text-sm font-black uppercase tracking-wide">Isi Data Infak</h3>
+              <h3 className="text-sm font-black uppercase tracking-wide">{isZakatProgram ? 'Isi Data Zakat' : 'Isi Data Donasi'}</h3>
               <button onClick={() => setIsMobileFormOpen(false)} className="w-7 h-7 bg-gray-50 rounded-none text-gray-400 text-xs font-bold flex items-center justify-center border border-gray-100">✕</button>
             </div>
             <DonationFormFields 
@@ -454,7 +544,7 @@ export default function CampaignDetailClient({ slug, referral }: { slug: string;
             <button onClick={() => setIsFundraiserModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
             <div className="space-y-1">
               <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Registrasi Fundraiser</h3>
-              <p className="text-[10px] font-medium text-gray-400">Bantu himpun dana gotong royong untuk program ini</p>
+              <p className="text-[10px] font-medium text-gray-400">Bantu menghimpun dukungan untuk program {SITE_NAME}</p>
             </div>
             <form onSubmit={handleRegisterFundraiser} className="space-y-3.5 pt-1">
               <div className="space-y-1">
