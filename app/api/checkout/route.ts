@@ -2,156 +2,488 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@sanity/client';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-// 🚀 BYPASS TEST: Memasukkan string token Editor langsung ke kode untuk melewati sumbatan Env Hosting
+// ==========================================================
+// ENVIRONMENT
+// ==========================================================
+
+const projectId =
+  process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'lsnco71s';
+
+const dataset =
+  process.env.NEXT_PUBLIC_SANITY_DATASET || 'production';
+
+const sanityToken = process.env.SANITY_API_WRITE_TOKEN;
+
+const pakasirApiKey = process.env.PAKASIR_API_KEY;
+
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'https://www.asyiq.ponpes.id';
+
+// ==========================================================
+// SANITY CLIENT
+// ==========================================================
+
 const client = createClient({
-  projectId: 'lsnco71s', 
-  dataset: 'production',
-  useCdn: false,
+  projectId,
+  dataset,
   apiVersion: '2024-01-01',
-  token: 'skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh', 
+  useCdn: false,
+
+  // PENTING:
+  // Token hanya dibaca dari server ENV
+  token: sanityToken,
 });
+
+// ==========================================================
+// POST CHECKOUT
+// ==========================================================
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    
-    const slug = body.slug || '';
-    const donorName = body.donorName || body.name || 'Hamba Allah';
-    const donorPhone = body.donorPhone || body.phone || body.whatsapp || ''; 
-    
-    // 🚀 LOGIKA AFILIASI: Tangkap nomor WhatsApp fundraiser yang dioper oleh frontend
-    const fundraiserPhone = body.fundraiserPhone || body.referral || '';
-    
-    // 🚀 DUKUNGAN MULTI-PAYMENT: Mengambil pilihan dari frontend. Fallback otomatis ke 'qris'
-    const paymentMethod = body.paymentMethod || 'qris';
-    const cleanMethod = String(paymentMethod).toLowerCase().trim();
-    
-    const rawAmount = body.amount || body.nominal || 0;
-    const cleanAmountNumber = Number(String(rawAmount).replace(/\D/g, ''));
+    // ======================================================
+    // VALIDASI ENV SERVER
+    // ======================================================
 
-    // Validasi dasar transaksi minimal Rp 1.000 agar sinkron dengan Pakasir QRIS
-    if (!slug || !cleanAmountNumber || cleanAmountNumber < 1000) {
+    if (!sanityToken) {
+      console.error(
+        '❌ SANITY_API_WRITE_TOKEN belum tersedia di environment variable.'
+      );
+
       return NextResponse.json(
-        { success: false, error: 'Data tidak valid. Minimal donasi adalah Rp 1.000' },
+        {
+          success: false,
+          error:
+            'Konfigurasi Sanity server belum lengkap.',
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!pakasirApiKey) {
+      console.error(
+        '❌ PAKASIR_API_KEY belum tersedia di environment variable.'
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Konfigurasi payment gateway belum lengkap.',
+        },
+        { status: 500 }
+      );
+    }
+
+    // ======================================================
+    // BODY REQUEST
+    // ======================================================
+
+    const body = await request.json();
+
+    const slug = String(body.slug || '').trim();
+
+    const donorName = String(
+      body.donorName ||
+        body.name ||
+        'Hamba Allah'
+    ).trim();
+
+    const donorPhone = String(
+      body.donorPhone ||
+        body.phone ||
+        body.whatsapp ||
+        ''
+    ).trim();
+
+    // ======================================================
+    // FUNDRAISER
+    // ======================================================
+
+    const fundraiserPhone = String(
+      body.fundraiserPhone ||
+        body.referral ||
+        ''
+    ).trim();
+
+    // ======================================================
+    // PAYMENT METHOD
+    // ======================================================
+
+    const paymentMethod =
+      body.paymentMethod || 'qris';
+
+    const cleanMethod = String(paymentMethod)
+      .toLowerCase()
+      .trim();
+
+    // ======================================================
+    // AMOUNT
+    // ======================================================
+
+    const rawAmount =
+      body.amount ||
+      body.nominal ||
+      0;
+
+    const cleanAmountNumber = Number(
+      String(rawAmount).replace(/\D/g, '')
+    );
+
+    if (
+      !slug ||
+      !cleanAmountNumber ||
+      cleanAmountNumber < 1000
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Data tidak valid. Minimal donasi adalah Rp 1.000',
+        },
         { status: 400 }
       );
     }
 
-    // Kustomisasi invoice prefix berdasarkan slug program donasi pesantren
-    const cleanSlug = String(slug).toUpperCase();
-    const prefix = cleanSlug.includes('ASRAMA') ? 'ASRAMA' : cleanSlug.includes('SANTRI') ? 'SANTRI' : 'ASYIQ';
-    const generatedOrderId = `INV-${prefix}-${Date.now()}`;
+    // ======================================================
+    // ORDER ID
+    // ======================================================
 
-    // 🚀 DISesuaIKAN: Menggunakan slug proyek Pakasir Pondok Pesantren 'Aasyiqul Qur'an secara presisi
-    const pakasirProjectSlug = 'pondok-pesantren-aasyiqul-quran';
-    const pakasirApiKey = process.env.PAKASIR_API_KEY || '';
+    const cleanSlug = slug.toUpperCase();
 
-    if (!pakasirApiKey || !pakasirApiKey.trim()) {
-      console.error('⚠️ Kredensial PAKASIR_API_KEY belum dikonfigurasi di file environment variables server!');
+    let prefix = 'ASYIQ';
+
+    if (cleanSlug.includes('ASRAMA')) {
+      prefix = 'ASRAMA';
+    } else if (cleanSlug.includes('SANTRI')) {
+      prefix = 'SANTRI';
     }
 
-    // Endpoint dinamis sesuai pilihan (qris, bri_va, bni_va, dll.)
-    const targetPakasirUrl = `https://app.pakasir.com/api/transactioncreate/${cleanMethod}`;
+    const generatedOrderId =
+      `INV-${prefix}-${Date.now()}`;
 
-    const pakasirResponse = await fetch(targetPakasirUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        project: pakasirProjectSlug,
-        order_id: generatedOrderId,
-        amount: cleanAmountNumber,
-        api_key: pakasirApiKey,
-      }),
-    });
+    // ======================================================
+    // PAKASIR
+    // ======================================================
 
-    const pakasirData = await pakasirResponse.json();
+    const pakasirProjectSlug =
+      'pondok-pesantren-aasyiqul-quran';
 
-    // Memeriksa kegagalan respon atau ketiadaan data objek payment dari Pakasir
-    if (!pakasirResponse.ok || !pakasirData.payment) {
-      throw new Error(pakasirData.message || `Gagal membuat transaksi ${cleanMethod} ke gateway API Pakasir.`);
-    }
+    const targetPakasirUrl =
+      `https://app.pakasir.com/api/transactioncreate/${cleanMethod}`;
 
-    // Properti ini berisi raw QR string jika memilih qris, atau nomor VA jika memilih bank transfer
-    const paymentNumber = pakasirData.payment.payment_number || '';
-    
-    // 🚀 DISESUAIKAN: Menggunakan domain resmi utama https://www.asyiq.ponpes.id
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.asyiq.ponpes.id';
-    const isQrisOnly = cleanMethod === 'qris' ? '&qris_only=1' : '';
-    
-    const fallbackUrlWeb = `https://app.pakasir.com/pay/${pakasirProjectSlug}/${cleanAmountNumber}?order_id=${generatedOrderId}${isQrisOnly}&redirect=${encodeURIComponent(`${siteUrl}/thank-you?order_id=${generatedOrderId}`)}`;
-    
-    // Gunakan payment_url bawaan dari objek gateway jika tersedia, atau arahkan ke fallback link web checkout
-    const paymentUrl = pakasirData.payment.payment_url || fallbackUrlWeb;
+    console.log(
+      `💳 Membuat transaksi Pakasir: ${generatedOrderId}`
+    );
 
-    // 🚀 GENERATE WAKTU LOKAL WIB (Asia/Jakarta) YANG AKURAT
-    const currentWibTimestamp = new Date().toLocaleString('id-ID', { 
-      timeZone: 'Asia/Jakarta',
-      dateStyle: 'medium',
-      timeStyle: 'medium'
-    });
+    const pakasirResponse = await fetch(
+      targetPakasirUrl,
+      {
+        method: 'POST',
 
-    // 🚀 1. MENULIS DATA TRANSAKSI LENGKAP KE SANITY (Beserta atribut waktu lokal WIB)
-    await client.create({
-      _type: 'donationTransaction',
-      orderId: String(generatedOrderId),
-      donorName: String(donorName),
-      donorPhone: String(donorPhone),
-      amount: Number(cleanAmountNumber),         
-      totalAmount: Number(pakasirData.payment.total_payment || cleanAmountNumber), 
-      status: 'pending',
-      slug: String(slug),
-      paymentMethod: String(cleanMethod), 
-      paymentUrl: String(paymentUrl), 
-      paymentNumber: String(paymentNumber), 
-      fundraiserPhone: fundraiserPhone ? String(fundraiserPhone).trim() : '',
-      createdAtWib: currentWibTimestamp, // Memastikan field tanggal terekam rapi berbasis WIB
-    });
+        headers: {
+          'Content-Type': 'application/json',
+        },
 
-    console.log(`🔒 TRANSAKSI BERHASIL DICATAT DI SANITY: ${generatedOrderId} | Waktu: ${currentWibTimestamp}`);
+        body: JSON.stringify({
+          project: pakasirProjectSlug,
+          order_id: generatedOrderId,
+          amount: cleanAmountNumber,
+          api_key: pakasirApiKey,
+        }),
 
-    // 🚀 2. SYNC KE GOOGLE SHEET
-    const googleSheetScriptUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL || '';
-
-    if (googleSheetScriptUrl && googleSheetScriptUrl.trim()) {
-      try {
-        await fetch(googleSheetScriptUrl.trim(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: generatedOrderId,
-            donorName: String(donorName),
-            donorPhone: `'${String(donorPhone)}`, // Ditambah petik agar awalan 08 tidak terpotong di Google Sheet
-            amount: cleanAmountNumber,
-            programSlug: String(slug),
-            paymentMethod: cleanMethod,
-            fundraiserPhone: fundraiserPhone ? `'${String(fundraiserPhone)}` : '-',
-            status: 'pending',
-            createdAt: currentWibTimestamp
-          }),
-        });
-        console.log(`📊 DATA SINKRON KE GOOGLE SHEET: ${generatedOrderId} pada ${currentWibTimestamp}`);
-      } catch (sheetError) {
-        console.error('🔥 Gagal mengirim data transaksi ke Google Sheet:', sheetError);
+        cache: 'no-store',
       }
-    } else {
-      console.warn('⚠️ GOOGLE_SHEET_WEBHOOK_URL belum dipasang di environment variables.');
+    );
+
+    // ======================================================
+    // PARSE RESPONSE PAKASIR
+    // ======================================================
+
+    let pakasirData: any;
+
+    try {
+      pakasirData =
+        await pakasirResponse.json();
+    } catch {
+      throw new Error(
+        'Response payment gateway tidak valid.'
+      );
     }
 
-    // Mengembalikan response sukses ke komponen frontend
+    console.log(
+      '📦 Response Pakasir:',
+      {
+        status: pakasirResponse.status,
+        hasPayment: !!pakasirData?.payment,
+      }
+    );
+
+    if (
+      !pakasirResponse.ok ||
+      !pakasirData?.payment
+    ) {
+      throw new Error(
+        pakasirData?.message ||
+          `Gagal membuat transaksi ${cleanMethod}.`
+      );
+    }
+
+    // ======================================================
+    // PAYMENT NUMBER
+    // ======================================================
+
+    const paymentNumber =
+      pakasirData.payment.payment_number || '';
+
+    // ======================================================
+    // PAYMENT URL
+    // ======================================================
+
+    const isQrisOnly =
+      cleanMethod === 'qris'
+        ? '&qris_only=1'
+        : '';
+
+    const redirectUrl =
+      `${siteUrl}/thank-you?order_id=${generatedOrderId}`;
+
+    const fallbackUrlWeb =
+      `https://app.pakasir.com/pay/` +
+      `${pakasirProjectSlug}/` +
+      `${cleanAmountNumber}` +
+      `?order_id=${generatedOrderId}` +
+      `${isQrisOnly}` +
+      `&redirect=${encodeURIComponent(
+        redirectUrl
+      )}`;
+
+    const paymentUrl =
+      pakasirData.payment.payment_url ||
+      fallbackUrlWeb;
+
+    // ======================================================
+    // WIB TIMESTAMP
+    // ======================================================
+
+    const currentWibTimestamp =
+      new Date().toLocaleString(
+        'id-ID',
+        {
+          timeZone: 'Asia/Jakarta',
+          dateStyle: 'medium',
+          timeStyle: 'medium',
+        }
+      );
+
+    // ======================================================
+    // SIMPAN SANITY
+    // ======================================================
+
+    try {
+      const createdTransaction =
+        await client.create({
+          _type: 'donationTransaction',
+
+          orderId:
+            String(generatedOrderId),
+
+          donorName:
+            String(donorName),
+
+          donorPhone:
+            String(donorPhone),
+
+          amount:
+            Number(cleanAmountNumber),
+
+          totalAmount:
+            Number(
+              pakasirData.payment
+                .total_payment ||
+                cleanAmountNumber
+            ),
+
+          status: 'pending',
+
+          slug:
+            String(slug),
+
+          paymentMethod:
+            String(cleanMethod),
+
+          paymentUrl:
+            String(paymentUrl),
+
+          paymentNumber:
+            String(paymentNumber),
+
+          fundraiserPhone:
+            fundraiserPhone
+              ? String(
+                  fundraiserPhone
+                ).trim()
+              : '',
+
+          createdAtWib:
+            currentWibTimestamp,
+        });
+
+      console.log(
+        `✅ TRANSAKSI SANITY BERHASIL:`,
+        createdTransaction._id
+      );
+
+    } catch (sanityError: any) {
+      console.error(
+        '🔥 SANITY CREATE ERROR:',
+        {
+          message:
+            sanityError?.message,
+
+          statusCode:
+            sanityError?.statusCode,
+
+          projectId,
+          dataset,
+
+          tokenAvailable:
+            Boolean(sanityToken),
+        }
+      );
+
+      throw new Error(
+        `Gagal menyimpan transaksi ke Sanity: ${
+          sanityError?.message ||
+          'Unknown Sanity error'
+        }`
+      );
+    }
+
+    // ======================================================
+    // GOOGLE SHEET
+    // ======================================================
+
+    const googleSheetScriptUrl =
+      process.env
+        .GOOGLE_SHEET_WEBHOOK_URL ||
+      '';
+
+    if (
+      googleSheetScriptUrl.trim()
+    ) {
+      try {
+        await fetch(
+          googleSheetScriptUrl.trim(),
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+
+            body: JSON.stringify({
+              orderId:
+                generatedOrderId,
+
+              donorName:
+                String(donorName),
+
+              donorPhone:
+                `'${String(
+                  donorPhone
+                )}`,
+
+              amount:
+                cleanAmountNumber,
+
+              programSlug:
+                String(slug),
+
+              paymentMethod:
+                cleanMethod,
+
+              fundraiserPhone:
+                fundraiserPhone
+                  ? `'${String(
+                      fundraiserPhone
+                    )}`
+                  : '-',
+
+              status:
+                'pending',
+
+              createdAt:
+                currentWibTimestamp,
+            }),
+          }
+        );
+
+        console.log(
+          `📊 GOOGLE SHEET BERHASIL: ${generatedOrderId}`
+        );
+      } catch (sheetError) {
+        // Google Sheet tidak boleh menggagalkan transaksi utama
+        console.error(
+          '⚠️ GOOGLE SHEET ERROR:',
+          sheetError
+        );
+      }
+    }
+
+    // ======================================================
+    // SUCCESS RESPONSE
+    // ======================================================
+
     return NextResponse.json({
       success: true,
-      orderId: generatedOrderId,
-      amount: cleanAmountNumber,
-      paymentMethod: cleanMethod,
-      paymentUrl: paymentUrl,       
-      paymentNumber: paymentNumber, 
+
+      orderId:
+        generatedOrderId,
+
+      amount:
+        cleanAmountNumber,
+
+      paymentMethod:
+        cleanMethod,
+
+      paymentUrl,
+
+      paymentNumber,
     });
 
   } catch (error: any) {
-    console.error('🔥 BACKEND CHECKOUT ERROR VIA API PAKASIR:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error(
+      '🔥 CHECKOUT ERROR:',
+      {
+        message:
+          error?.message,
+
+        statusCode:
+          error?.statusCode,
+
+        stack:
+          process.env.NODE_ENV ===
+          'development'
+            ? error?.stack
+            : undefined,
+      }
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+
+        error:
+          error?.message ||
+          'Terjadi kesalahan saat membuat transaksi.',
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
