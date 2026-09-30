@@ -16,9 +16,12 @@ interface Program {
   collectedRaw?: number | string;
   collected?: number | string;
   totalCollected?: number | string;
+
   donors?: unknown[];
+
   donorsCount?: number | string;
   donorCount?: number | string;
+
   status?: string;
 }
 
@@ -51,11 +54,11 @@ function safeNumber(value: unknown): number {
   return 0;
 }
 
-function formatRupiah(value: number) {
+function formatRupiah(value: number): string {
   return new Intl.NumberFormat('id-ID').format(value);
 }
 
-function formatNumber(value: number) {
+function formatNumber(value: number): string {
   return new Intl.NumberFormat('id-ID').format(value);
 }
 
@@ -65,9 +68,7 @@ function formatNumber(value: number) {
 
 export default function TotalAccumulationWidget() {
   const [stats, setStats] = useState<Statistics>(INITIAL_STATS);
-
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState(false);
 
   // ==========================================================
@@ -86,11 +87,11 @@ export default function TotalAccumulationWidget() {
           `/api/programs?v=${Date.now()}`,
           {
             method: 'GET',
-
             cache: 'no-store',
 
             headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Cache-Control':
+                'no-cache, no-store, must-revalidate',
               Pragma: 'no-cache',
             },
 
@@ -106,7 +107,10 @@ export default function TotalAccumulationWidget() {
 
         const json = await response.json();
 
-        if (!json?.success || !Array.isArray(json?.data)) {
+        if (
+          !json?.success ||
+          !Array.isArray(json?.data)
+        ) {
           throw new Error(
             json?.error ||
               json?.message ||
@@ -120,7 +124,10 @@ export default function TotalAccumulationWidget() {
         // HITUNG TOTAL
         // ======================================================
 
-        const calculated = programs.reduce(
+        const calculated = programs.reduce<{
+          totalCollected: number;
+          totalDonors: number;
+        }>(
           (acc, program) => {
             // --------------------------------------------------
             // TOTAL DANA
@@ -151,25 +158,33 @@ export default function TotalAccumulationWidget() {
               program.donorsCount !== undefined &&
               program.donorsCount !== null
             ) {
-              donorCount = safeNumber(program.donorsCount);
+              donorCount = safeNumber(
+                program.donorsCount
+              );
             } else if (
               program.donorCount !== undefined &&
               program.donorCount !== null
             ) {
-              donorCount = safeNumber(program.donorCount);
-            } else if (Array.isArray(program.donors)) {
-              donorCount = program.donors.length;
+              donorCount = safeNumber(
+                program.donorCount
+              );
+            } else if (
+              Array.isArray(program.donors)
+            ) {
+              donorCount =
+                program.donors.length;
             }
 
             return {
               totalCollected:
-                acc.totalCollected + collected,
+                acc.totalCollected +
+                collected,
 
               totalDonors:
-                acc.totalDonors + donorCount,
+                acc.totalDonors +
+                donorCount,
             };
           },
-
           {
             totalCollected: 0,
             totalDonors: 0,
@@ -180,15 +195,23 @@ export default function TotalAccumulationWidget() {
         // TOTAL PROGRAM
         // ======================================================
 
-        const totalPrograms = programs.length;
+        const totalPrograms =
+          programs.length;
 
         setStats({
-          totalCollected: calculated.totalCollected,
-          totalDonors: calculated.totalDonors,
+          totalCollected:
+            calculated.totalCollected,
+
+          totalDonors:
+            calculated.totalDonors,
+
           totalPrograms,
         });
-      } catch (err: any) {
-        if (err?.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          err.name === 'AbortError'
+        ) {
           return;
         }
 
@@ -199,9 +222,13 @@ export default function TotalAccumulationWidget() {
 
         setError(true);
 
-        setStats(INITIAL_STATS);
+        setStats(
+          INITIAL_STATS
+        );
       } finally {
-        if (!controller.signal.aborted) {
+        if (
+          !controller.signal.aborted
+        ) {
           setLoading(false);
         }
       }
@@ -277,7 +304,9 @@ export default function TotalAccumulationWidget() {
                 Rp
               </span>
 
-              {formatRupiah(stats.totalCollected)}
+              {formatRupiah(
+                stats.totalCollected
+              )}
 
             </div>
           ) : (
@@ -314,7 +343,9 @@ export default function TotalAccumulationWidget() {
             <div className="flex items-baseline justify-center gap-2">
 
               <span className="text-3xl md:text-4xl font-black text-gray-800 tracking-tight">
-                {formatNumber(stats.totalDonors)}
+                {formatNumber(
+                  stats.totalDonors
+                )}
               </span>
 
               <span className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-wider">
@@ -359,7 +390,9 @@ export default function TotalAccumulationWidget() {
           <div className="flex items-baseline justify-center gap-2">
 
             <span className="text-3xl md:text-4xl font-black text-gray-800 tracking-tight">
-              {formatNumber(stats.totalPrograms)}
+              {formatNumber(
+                stats.totalPrograms
+              )}
             </span>
 
             <span className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-wider">
