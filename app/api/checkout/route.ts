@@ -14,13 +14,22 @@ const projectId =
 const dataset =
   process.env.NEXT_PUBLIC_SANITY_DATASET || 'production';
 
-const sanityToken = process.env.SANITY_API_WRITE_TOKEN;
+const sanityToken =
+  process.env.SANITY_API_WRITE_TOKEN || '';
 
-const pakasirApiKey = process.env.PAKASIR_API_KEY;
+const pakasirApiKey =
+  process.env.PAKASIR_API_KEY || '';
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ||
   'https://www.asyiq.ponpes.id';
+
+// ==========================================================
+// PAKASIR CONFIG
+// ==========================================================
+
+const pakasirProjectSlug =
+  'pondok-pesantren-aasyiqul-quran';
 
 // ==========================================================
 // SANITY CLIENT
@@ -31,25 +40,123 @@ const client = createClient({
   dataset,
   apiVersion: '2024-01-01',
   useCdn: false,
-
-  // PENTING:
-  // Token hanya dibaca dari server ENV
   token: sanityToken,
 });
+
+// ==========================================================
+// TYPES
+// ==========================================================
+
+type PaymentMethod =
+  | 'payment_link'
+  | 'qris'
+  | 'bri_va'
+  | 'bni_va'
+  | 'cimb_niaga_va'
+  | 'permata_va'
+  | 'maybank_va'
+  | 'bnc_va'
+  | 'artha_graha_va'
+  | 'sampoerna_va';
+
+interface PakasirCreateResponse {
+  txn_id?: string;
+
+  project?: string;
+  order_id?: string;
+
+  amount?: number;
+  fee?: number;
+  total_payment?: number;
+
+  payment_method?: string;
+
+  qr_string?: string;
+  va_number?: string;
+
+  expired_at?: string;
+
+  payment_link?: string;
+
+  is_sandbox?: boolean;
+
+  message?: string;
+  error?: string;
+}
+
+// ==========================================================
+// PAYMENT METHODS
+// ==========================================================
+
+const PAYMENT_METHODS: PaymentMethod[] = [
+  'payment_link',
+  'qris',
+  'bri_va',
+  'bni_va',
+  'cimb_niaga_va',
+  'permata_va',
+  'maybank_va',
+  'bnc_va',
+  'artha_graha_va',
+  'sampoerna_va',
+];
+
+// ==========================================================
+// HELPERS
+// ==========================================================
+
+function isValidPaymentMethod(
+  value: string
+): value is PaymentMethod {
+  return PAYMENT_METHODS.includes(
+    value as PaymentMethod
+  );
+}
+
+function getMinimumAmount(
+  method: PaymentMethod
+): number {
+  if (
+    method === 'payment_link' ||
+    method === 'qris'
+  ) {
+    return 500;
+  }
+
+  return 10000;
+}
+
+function getMaximumAmount(
+  method: PaymentMethod
+): number {
+  if (method === 'qris') {
+    return 10000000;
+  }
+
+  return 50000000;
+}
+
+function formatRupiah(value: number) {
+  return new Intl.NumberFormat(
+    'id-ID'
+  ).format(value);
+}
 
 // ==========================================================
 // POST CHECKOUT
 // ==========================================================
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
     // ======================================================
-    // VALIDASI ENV SERVER
+    // ENV VALIDATION
     // ======================================================
 
     if (!sanityToken) {
       console.error(
-        '❌ SANITY_API_WRITE_TOKEN belum tersedia di environment variable.'
+        '❌ SANITY_API_WRITE_TOKEN belum tersedia.'
       );
 
       return NextResponse.json(
@@ -58,92 +165,169 @@ export async function POST(request: Request) {
           error:
             'Konfigurasi Sanity server belum lengkap.',
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
     if (!pakasirApiKey) {
       console.error(
-        '❌ PAKASIR_API_KEY belum tersedia di environment variable.'
+        '❌ PAKASIR_API_KEY belum tersedia.'
       );
 
       return NextResponse.json(
         {
           success: false,
           error:
-            'Konfigurasi payment gateway belum lengkap.',
+            'Konfigurasi Pakasir belum lengkap.',
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
     // ======================================================
-    // BODY REQUEST
+    // REQUEST BODY
     // ======================================================
 
-    const body = await request.json();
+    const body =
+      await request.json();
 
-    const slug = String(body.slug || '').trim();
+    const slug =
+      String(
+        body?.slug || ''
+      ).trim();
 
-    const donorName = String(
-      body.donorName ||
-        body.name ||
+    const donorName =
+      String(
+        body?.donorName ||
+        body?.name ||
         'Hamba Allah'
-    ).trim();
+      ).trim();
 
-    const donorPhone = String(
-      body.donorPhone ||
-        body.phone ||
-        body.whatsapp ||
+    const donorPhone =
+      String(
+        body?.donorPhone ||
+        body?.phone ||
+        body?.whatsapp ||
         ''
-    ).trim();
+      ).trim();
 
-    // ======================================================
-    // FUNDRAISER
-    // ======================================================
-
-    const fundraiserPhone = String(
-      body.fundraiserPhone ||
-        body.referral ||
+    const fundraiserPhone =
+      String(
+        body?.fundraiserPhone ||
+        body?.referral ||
         ''
-    ).trim();
+      ).trim();
 
     // ======================================================
     // PAYMENT METHOD
     // ======================================================
 
-    const paymentMethod =
-      body.paymentMethod || 'qris';
+    const cleanMethod =
+      String(
+        body?.paymentMethod ||
+        'qris'
+      )
+        .toLowerCase()
+        .trim();
 
-    const cleanMethod = String(paymentMethod)
-      .toLowerCase()
-      .trim();
+    if (
+      !isValidPaymentMethod(
+        cleanMethod
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Metode pembayaran "${cleanMethod}" tidak tersedia.`,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     // ======================================================
     // AMOUNT
     // ======================================================
 
     const rawAmount =
-      body.amount ||
-      body.nominal ||
+      body?.amount ??
+      body?.nominal ??
       0;
 
-    const cleanAmountNumber = Number(
-      String(rawAmount).replace(/\D/g, '')
-    );
+    const cleanAmountNumber =
+      Number(
+        String(rawAmount)
+          .replace(/\D/g, '')
+      );
 
     if (
       !slug ||
-      !cleanAmountNumber ||
-      cleanAmountNumber < 1000
+      !Number.isFinite(
+        cleanAmountNumber
+      ) ||
+      cleanAmountNumber <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            'Data tidak valid. Minimal donasi adalah Rp 1.000',
+            'Data donasi tidak valid.',
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ======================================================
+    // VALIDASI NOMINAL BERDASARKAN METODE
+    // ======================================================
+
+    const minimumAmount =
+      getMinimumAmount(
+        cleanMethod
+      );
+
+    const maximumAmount =
+      getMaximumAmount(
+        cleanMethod
+      );
+
+    if (
+      cleanAmountNumber <
+      minimumAmount
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Minimal pembayaran untuk ${cleanMethod.toUpperCase()} adalah Rp ${formatRupiah(minimumAmount)}.`,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      cleanAmountNumber >
+      maximumAmount
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Maksimal pembayaran untuk ${cleanMethod.toUpperCase()} adalah Rp ${formatRupiah(maximumAmount)}.`,
+        },
+        {
+          status: 400,
+        }
       );
     }
 
@@ -151,192 +335,376 @@ export async function POST(request: Request) {
     // ORDER ID
     // ======================================================
 
-    const cleanSlug = slug.toUpperCase();
+    const cleanSlug =
+      slug.toUpperCase();
 
-    let prefix = 'ASYIQ';
+    let prefix =
+      'ASYIQ';
 
-    if (cleanSlug.includes('ASRAMA')) {
-      prefix = 'ASRAMA';
-    } else if (cleanSlug.includes('SANTRI')) {
-      prefix = 'SANTRI';
+    if (
+      cleanSlug.includes(
+        'ASRAMA'
+      )
+    ) {
+      prefix =
+        'ASRAMA';
+    } else if (
+      cleanSlug.includes(
+        'SANTRI'
+      )
+    ) {
+      prefix =
+        'SANTRI';
     }
 
     const generatedOrderId =
       `INV-${prefix}-${Date.now()}`;
 
     // ======================================================
-    // PAKASIR
+    // PAKASIR V2 ENDPOINT
     // ======================================================
-
-    const pakasirProjectSlug =
-      'pondok-pesantren-aasyiqul-quran';
 
     const targetPakasirUrl =
-      `https://app.pakasir.com/api/transactioncreate/${cleanMethod}`;
+      `https://app.pakasir.com/api/v2/create-transaction/` +
+      `${encodeURIComponent(pakasirProjectSlug)}/` +
+      `${encodeURIComponent(generatedOrderId)}`;
 
     console.log(
-      `💳 Membuat transaksi Pakasir: ${generatedOrderId}`
-    );
-
-    const pakasirResponse = await fetch(
-      targetPakasirUrl,
-      {
-        method: 'POST',
-
-        headers: {
-          'Content-Type': 'application/json',
-        },
-
-        body: JSON.stringify({
-          project: pakasirProjectSlug,
-          order_id: generatedOrderId,
-          amount: cleanAmountNumber,
-          api_key: pakasirApiKey,
-        }),
-
-        cache: 'no-store',
-      }
+      `💳 Membuat transaksi Pakasir v2: ${generatedOrderId}`
     );
 
     // ======================================================
-    // PARSE RESPONSE PAKASIR
+    // CREATE TRANSACTION PAKASIR V2
     // ======================================================
 
-    let pakasirData: any;
+    const pakasirResponse =
+      await fetch(
+        targetPakasirUrl,
+        {
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            'X-Api-Key':
+              pakasirApiKey,
+          },
+
+          body:
+            JSON.stringify({
+              method:
+                cleanMethod,
+
+              amount:
+                cleanAmountNumber,
+            }),
+
+          cache:
+            'no-store',
+        }
+      );
+
+    // ======================================================
+    // READ RESPONSE
+    // ======================================================
+
+    let pakasirData:
+      PakasirCreateResponse;
 
     try {
       pakasirData =
         await pakasirResponse.json();
     } catch {
       throw new Error(
-        'Response payment gateway tidak valid.'
+        'Response Pakasir tidak dapat dibaca.'
       );
     }
-
-    console.log(
-      '📦 Response Pakasir:',
-      {
-        status: pakasirResponse.status,
-        hasPayment: !!pakasirData?.payment,
-      }
-    );
 
     if (
-      !pakasirResponse.ok ||
-      !pakasirData?.payment
+      !pakasirResponse.ok
     ) {
+      console.error(
+        '🔥 PAKASIR V2 ERROR:',
+        {
+          status:
+            pakasirResponse.status,
+
+          data:
+            pakasirData,
+        }
+      );
+
       throw new Error(
         pakasirData?.message ||
-          `Gagal membuat transaksi ${cleanMethod}.`
+        pakasirData?.error ||
+        `Gagal membuat transaksi Pakasir. HTTP ${pakasirResponse.status}`
       );
     }
 
     // ======================================================
-    // PAYMENT NUMBER
+    // VALIDATE TXN ID
     // ======================================================
 
-    const paymentNumber =
-      pakasirData.payment.payment_number || '';
+    const txnId =
+      String(
+        pakasirData?.txn_id ||
+        ''
+      ).trim();
+
+    if (!txnId) {
+      throw new Error(
+        'Pakasir tidak mengembalikan txn_id.'
+      );
+    }
+
+    // ======================================================
+    // VALIDATE RESPONSE
+    // ======================================================
+
+    if (
+      pakasirData.order_id &&
+      pakasirData.order_id !==
+        generatedOrderId
+    ) {
+      throw new Error(
+        'Order ID response Pakasir tidak cocok.'
+      );
+    }
+
+    if (
+      pakasirData.amount !==
+        undefined &&
+      Number(
+        pakasirData.amount
+      ) !== cleanAmountNumber
+    ) {
+      throw new Error(
+        'Nominal response Pakasir tidak cocok.'
+      );
+    }
+
+    if (
+      pakasirData.project &&
+      pakasirData.project !==
+        pakasirProjectSlug
+    ) {
+      throw new Error(
+        'Project Pakasir tidak cocok.'
+      );
+    }
+
+    // ======================================================
+    // PAYMENT DATA
+    // ======================================================
+
+    const fee =
+      Number(
+        pakasirData.fee || 0
+      );
+
+    const totalPayment =
+      Number(
+        pakasirData.total_payment ||
+        cleanAmountNumber
+      );
+
+    const paymentMethod =
+      String(
+        pakasirData.payment_method ||
+        cleanMethod
+      );
+
+    const qrString =
+      String(
+        pakasirData.qr_string ||
+        ''
+      );
+
+    const vaNumber =
+      String(
+        pakasirData.va_number ||
+        ''
+      );
+
+    const expiredAt =
+      pakasirData.expired_at
+        ? String(
+            pakasirData.expired_at
+          )
+        : null;
+
+    const isSandbox =
+      Boolean(
+        pakasirData.is_sandbox
+      );
 
     // ======================================================
     // PAYMENT URL
     // ======================================================
 
-    const isQrisOnly =
-      cleanMethod === 'qris'
-        ? '&qris_only=1'
-        : '';
-
     const redirectUrl =
-      `${siteUrl}/thank-you?order_id=${generatedOrderId}`;
+      `${siteUrl}/thank-you?order_id=${encodeURIComponent(generatedOrderId)}`;
 
-    const fallbackUrlWeb =
-      `https://app.pakasir.com/pay/` +
-      `${pakasirProjectSlug}/` +
-      `${cleanAmountNumber}` +
-      `?order_id=${generatedOrderId}` +
-      `${isQrisOnly}` +
-      `&redirect=${encodeURIComponent(
+    let paymentUrl = '';
+
+    if (
+      cleanMethod ===
+      'payment_link'
+    ) {
+      const rawPaymentLink =
+        String(
+          pakasirData.payment_link ||
+          ''
+        ).trim();
+
+      if (!rawPaymentLink) {
+        throw new Error(
+          'Pakasir tidak mengembalikan payment_link.'
+        );
+      }
+
+      const separator =
+        rawPaymentLink.includes('?')
+          ? '&'
+          : '?';
+
+      paymentUrl =
+        `${rawPaymentLink}` +
+        `${separator}redirect=${encodeURIComponent(redirectUrl)}`;
+
+    } else {
+      const params =
+        new URLSearchParams();
+
+      if (
+        cleanMethod ===
+        'qris'
+      ) {
+        params.set(
+          'qris_only',
+          '1'
+        );
+      }
+
+      params.set(
+        'redirect',
         redirectUrl
-      )}`;
+      );
 
-    const paymentUrl =
-      pakasirData.payment.payment_url ||
-      fallbackUrlWeb;
+      paymentUrl =
+        `https://app.pakasir.com/pay-v2/${encodeURIComponent(txnId)}` +
+        `?${params.toString()}`;
+    }
 
     // ======================================================
-    // WIB TIMESTAMP
+    // LOCAL WIB TIME
     // ======================================================
+
+    const createdAtIso =
+      new Date().toISOString();
 
     const currentWibTimestamp =
       new Date().toLocaleString(
         'id-ID',
         {
-          timeZone: 'Asia/Jakarta',
-          dateStyle: 'medium',
-          timeStyle: 'medium',
+          timeZone:
+            'Asia/Jakarta',
+
+          dateStyle:
+            'medium',
+
+          timeStyle:
+            'medium',
         }
       );
 
     // ======================================================
-    // SIMPAN SANITY
+    // SAVE SANITY
     // ======================================================
 
     try {
       const createdTransaction =
         await client.create({
-          _type: 'donationTransaction',
+          _type:
+            'donationTransaction',
+
+          // Pakasir
+          txnId:
+            txnId,
 
           orderId:
-            String(generatedOrderId),
+            generatedOrderId,
 
+          pakasirProject:
+            pakasirProjectSlug,
+
+          // Donor
           donorName:
-            String(donorName),
+            donorName,
 
           donorPhone:
-            String(donorPhone),
+            donorPhone,
 
+          // Program
+          slug:
+            slug,
+
+          // Amount
           amount:
-            Number(cleanAmountNumber),
+            cleanAmountNumber,
+
+          fee:
+            fee,
 
           totalAmount:
-            Number(
-              pakasirData.payment
-                .total_payment ||
-                cleanAmountNumber
-            ),
+            totalPayment,
 
-          status: 'pending',
-
-          slug:
-            String(slug),
-
+          // Payment
           paymentMethod:
-            String(cleanMethod),
+            paymentMethod,
 
           paymentUrl:
-            String(paymentUrl),
+            paymentUrl,
 
-          paymentNumber:
-            String(paymentNumber),
+          qrString:
+            qrString,
 
+          vaNumber:
+            vaNumber,
+
+          expiredAt:
+            expiredAt,
+
+          isSandbox:
+            isSandbox,
+
+          // Status
+          status:
+            'pending',
+
+          gatewayStatus:
+            'pending',
+
+          // Referral
           fundraiserPhone:
-            fundraiserPhone
-              ? String(
-                  fundraiserPhone
-                ).trim()
-              : '',
+            fundraiserPhone,
+
+          // Time
+          createdAt:
+            createdAtIso,
 
           createdAtWib:
             currentWibTimestamp,
         });
 
       console.log(
-        `✅ TRANSAKSI SANITY BERHASIL:`,
-        createdTransaction._id
+        `✅ TRANSAKSI SANITY TERSIMPAN: ${createdTransaction._id}`
       );
-
-    } catch (sanityError: any) {
+    } catch (
+      sanityError: any
+    ) {
       console.error(
         '🔥 SANITY CREATE ERROR:',
         {
@@ -350,7 +718,9 @@ export async function POST(request: Request) {
           dataset,
 
           tokenAvailable:
-            Boolean(sanityToken),
+            Boolean(
+              sanityToken
+            ),
         }
       );
 
@@ -363,7 +733,7 @@ export async function POST(request: Request) {
     }
 
     // ======================================================
-    // GOOGLE SHEET
+    // GOOGLE SHEET - PENDING
     // ======================================================
 
     const googleSheetScriptUrl =
@@ -378,55 +748,68 @@ export async function POST(request: Request) {
         await fetch(
           googleSheetScriptUrl.trim(),
           {
-            method: 'POST',
+            method:
+              'POST',
 
             headers: {
               'Content-Type':
                 'application/json',
             },
 
-            body: JSON.stringify({
-              orderId:
-                generatedOrderId,
+            body:
+              JSON.stringify({
+                txnId:
+                  txnId,
 
-              donorName:
-                String(donorName),
+                orderId:
+                  generatedOrderId,
 
-              donorPhone:
-                `'${String(
+                donorName:
+                  donorName,
+
+                donorPhone:
                   donorPhone
-                )}`,
+                    ? `'${donorPhone}`
+                    : '',
 
-              amount:
-                cleanAmountNumber,
+                amount:
+                  cleanAmountNumber,
 
-              programSlug:
-                String(slug),
+                fee:
+                  fee,
 
-              paymentMethod:
-                cleanMethod,
+                totalPayment:
+                  totalPayment,
 
-              fundraiserPhone:
-                fundraiserPhone
-                  ? `'${String(
-                      fundraiserPhone
-                    )}`
-                  : '-',
+                programSlug:
+                  slug,
 
-              status:
-                'pending',
+                paymentMethod:
+                  paymentMethod,
 
-              createdAt:
-                currentWibTimestamp,
-            }),
+                fundraiserPhone:
+                  fundraiserPhone
+                    ? `'${fundraiserPhone}`
+                    : '-',
+
+                status:
+                  'pending',
+
+                expiredAt:
+                  expiredAt,
+
+                createdAt:
+                  currentWibTimestamp,
+              }),
           }
         );
 
         console.log(
-          `📊 GOOGLE SHEET BERHASIL: ${generatedOrderId}`
+          `📊 GOOGLE SHEET PENDING TERCATAT: ${generatedOrderId}`
         );
-      } catch (sheetError) {
-        // Google Sheet tidak boleh menggagalkan transaksi utama
+      } catch (
+        sheetError
+      ) {
         console.error(
           '⚠️ GOOGLE SHEET ERROR:',
           sheetError
@@ -435,11 +818,15 @@ export async function POST(request: Request) {
     }
 
     // ======================================================
-    // SUCCESS RESPONSE
+    // RESPONSE TO FRONTEND
     // ======================================================
 
     return NextResponse.json({
-      success: true,
+      success:
+        true,
+
+      txnId:
+        txnId,
 
       orderId:
         generatedOrderId,
@@ -447,15 +834,38 @@ export async function POST(request: Request) {
       amount:
         cleanAmountNumber,
 
+      fee:
+        fee,
+
+      totalPayment:
+        totalPayment,
+
       paymentMethod:
-        cleanMethod,
+        paymentMethod,
 
-      paymentUrl,
+      paymentUrl:
+        paymentUrl,
 
-      paymentNumber,
+      qrString:
+        qrString,
+
+      vaNumber:
+        vaNumber,
+
+      expiredAt:
+        expiredAt,
+
+      isSandbox:
+        isSandbox,
+
+      // Untuk kompatibilitas frontend lama
+      paymentNumber:
+        vaNumber,
     });
 
-  } catch (error: any) {
+  } catch (
+    error: any
+  ) {
     console.error(
       '🔥 CHECKOUT ERROR:',
       {
@@ -475,14 +885,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        success: false,
+        success:
+          false,
 
         error:
           error?.message ||
           'Terjadi kesalahan saat membuat transaksi.',
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }

@@ -3,21 +3,133 @@ import { createClient } from '@sanity/client';
 import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-// 🚀 BYPASS CLIENT: Murni untuk update data esensial program website
+// ============================================================================
+// CONFIG
+// ============================================================================
+
+const SANITY_PROJECT_ID =
+  process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'lsnco71s';
+
+const SANITY_DATASET =
+  process.env.NEXT_PUBLIC_SANITY_DATASET || 'production';
+
+const SANITY_TOKEN =
+  process.env.SANITY_API_WRITE_TOKEN || '';
+
+const PAKASIR_WEBHOOK_SECRET =
+  process.env.PAKASIR_WEBHOOK_SECRET || '';
+
+// ============================================================================
+// SANITY CLIENT
+// ============================================================================
+
 const client = createClient({
-  projectId: 'lsnco71s',
-  dataset: 'production',
-  useCdn: false,
+  projectId: SANITY_PROJECT_ID,
+  dataset: SANITY_DATASET,
   apiVersion: '2024-01-01',
-  token: 'skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh',
+  useCdn: false,
+  token: SANITY_TOKEN,
 });
 
-// ===================================================================
-// 📊 OTOMATISASI PENULISAN DATABASE KE GOOGLE SHEETS
-// ===================================================================
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface DonationTransaction {
+  _id: string;
+  _rev: string;
+
+  txnId?: string;
+  orderId?: string;
+
+  donorName?: string;
+  donorPhone?: string;
+
+  amount?: number;
+
+  status?: string;
+
+  slug?: string;
+
+  paymentMethod?: string;
+
+  fundraiserPhone?: string;
+}
+
+interface ProgramDocument {
+  _id: string;
+  title?: string;
+}
+
+interface FundraiserDocument {
+  _id: string;
+  name?: string;
+  phone?: string;
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function safeNumber(value: unknown): number {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
+
+function normalizePhone(value: unknown): string {
+  const raw = String(value || '')
+    .replace(/[^0-9]/g, '');
+
+  if (!raw) {
+    return '';
+  }
+
+  if (raw.startsWith('0')) {
+    return `62${raw.slice(1)}`;
+  }
+
+  if (raw.startsWith('62')) {
+    return raw;
+  }
+
+  if (raw.startsWith('8')) {
+    return `62${raw}`;
+  }
+
+  return raw;
+}
+
+function localPhone(value: unknown): string {
+  const raw = String(value || '')
+    .replace(/[^0-9]/g, '');
+
+  if (!raw) {
+    return '';
+  }
+
+  if (raw.startsWith('62')) {
+    return `0${raw.slice(2)}`;
+  }
+
+  return raw;
+}
+
+function formatRupiah(value: number): string {
+  return new Intl.NumberFormat('id-ID').format(value);
+}
+
+// ============================================================================
+// GOOGLE SHEETS
+// ============================================================================
+
 async function appendToGoogleSheets(data: {
   orderId: string;
+  txnId: string;
   name: string;
   phone: string;
   amount: number;
@@ -25,181 +137,1007 @@ async function appendToGoogleSheets(data: {
   date: string;
 }) {
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    const email =
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 
-    const sheets = google.sheets({ version: 'v4', auth });
-    
-    let cleanPhone = data.phone.replace(/[^0-9]/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '62' + cleanPhone.slice(1);
+    const privateKey =
+      process.env.GOOGLE_PRIVATE_KEY
+        ?.replace(/\\n/g, '\n');
+
+    const spreadsheetId =
+      process.env.GOOGLE_SHEET_ID;
+
+    if (
+      !email ||
+      !privateKey ||
+      !spreadsheetId
+    ) {
+      console.warn(
+        '⚠️ Google Sheets dilewati karena konfigurasi belum lengkap.'
+      );
+
+      return;
     }
 
-    const whatsappFormula = cleanPhone 
-      ? `=HYPERLINK("https://wa.me/${cleanPhone}"; "${data.phone}")` 
-      : '-';
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: email,
+        private_key: privateKey,
+      },
+
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+      ],
+    });
+
+    const sheets = google.sheets({
+      version: 'v4',
+      auth,
+    });
+
+    const cleanPhone =
+      normalizePhone(data.phone);
+
+    const whatsappFormula =
+      cleanPhone
+        ? `=HYPERLINK("https://wa.me/${cleanPhone}"; "${data.phone}")`
+        : '-';
 
     await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'Sheet1!A:F',
+      spreadsheetId,
+
+      range: 'Sheet1!A:G',
+
       valueInputOption: 'USER_ENTERED',
+
       requestBody: {
-        values: [[data.date, data.orderId, data.name, whatsappFormula, data.amount, data.program]],
+        values: [
+          [
+            data.date,
+            data.orderId,
+            data.txnId,
+            data.name,
+            whatsappFormula,
+            data.amount,
+            data.program,
+          ],
+        ],
       },
     });
-    console.log('📊 MUTASI GOOGLE SHEETS SUKSES.');
-  } catch (err) {
-    console.error('🔥 GOOGLE SHEETS ERROR:', err);
+
+    console.log(
+      `📊 GOOGLE SHEET SUKSES: ${data.orderId}`
+    );
+  } catch (error) {
+    // Jangan menggagalkan transaksi utama
+    console.error(
+      '🔥 GOOGLE SHEETS ERROR:',
+      error
+    );
   }
 }
 
-// ===================================================================
-// MAIN WEBHOOK CONTROLLER
-// ===================================================================
-export async function POST(request: Request) {
+// ============================================================================
+// WHATSAPP FONNTE
+// ============================================================================
+
+async function sendWhatsappReceipt(data: {
+  phone: string;
+  donorName: string;
+  orderId: string;
+  programName: string;
+  amount: number;
+  paymentMethod: string;
+  date: string;
+  time: string;
+}) {
   try {
-    const payload = await request.json();
-    const amount = payload.amount;
-    const order_id = payload.order_id;
-    const status = payload.status; 
+    const token =
+      process.env.FONNTE_TOKEN;
 
-    const cleanOrderId = order_id ? String(order_id).trim() : '';
-    if (!cleanOrderId) return NextResponse.json({ success: false, message: "Order ID tidak ditemukan." }, { status: 400 });
+    if (!token) {
+      console.warn(
+        '⚠️ FONNTE_TOKEN belum tersedia.'
+      );
 
-    const cleanStatus = status ? String(status).toLowerCase().trim() : '';
-    if (cleanStatus !== 'completed' && cleanStatus !== 'success' && cleanStatus !== 'paid') {
-      return NextResponse.json({ success: true, message: `Status (${status}) diabaikan.` });
+      return;
     }
 
-    // 1. Ambil Data Transaksi
-    const transactionQuery = `*[_type == "donationTransaction" && orderId == $orderId][0]`;
-    const pendingTransaction = await client.fetch(transactionQuery, { orderId: cleanOrderId });
+    const phone =
+      normalizePhone(data.phone);
 
-    let donorNameFromForm = "Hamba Allah";
-    let donorPhoneFromForm = "";
-    let programSlug = "sedekah-subuh"; 
-    let paymentMethodUsed = "QRIS";
-
-    if (pendingTransaction) {
-      if (pendingTransaction.status === 'success') return NextResponse.json({ success: true, message: "Sudah diproses." });
-      if (pendingTransaction.donorName) donorNameFromForm = String(pendingTransaction.donorName).trim();
-      if (pendingTransaction.donorPhone) donorPhoneFromForm = String(pendingTransaction.donorPhone).trim();
-      if (pendingTransaction.slug) programSlug = String(pendingTransaction.slug).toLowerCase().trim();
-      if (pendingTransaction.paymentMethod) paymentMethodUsed = String(pendingTransaction.paymentMethod).toUpperCase();
+    if (!phone) {
+      return;
     }
 
-    // 2. Ambil Program
-    const findQuery = `*[_type == "program" && slug.current == $slug][0] { _id, title, collectedRaw, donors }`;
-    const finalProgram = await client.fetch(findQuery, { slug: programSlug });
-    if (!finalProgram) return NextResponse.json({ success: false, message: `Program tidak ditemukan.` }, { status: 404 });
+    const message = `*DONASI BERHASIL DITERIMA* 🎉
 
-    const donationAmount = Number(amount) || Number(pendingTransaction?.amount) || 0;
-    const currentDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    const currentFullTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+Jazakumullah khairan, Kak *${data.donorName}*. Donasi Anda telah berhasil kami verifikasi.
 
-    // ===================================================================
-    // 3. JALANKAN MUTASI SANITY & LOGIKA AFILIASI
-    // ===================================================================
-    if (pendingTransaction) {
-      // Tandai sukses
-      await client.patch(pendingTransaction._id).set({ status: 'success' }).commit();
+📝 *No. Invoice:* ${data.orderId}
+📌 *Program:* ${data.programName}
+💰 *Nominal:* Rp ${formatRupiah(data.amount)}
+💳 *Metode:* ${data.paymentMethod}
+⏰ *Tanggal:* ${data.date} - ${data.time} WIB
 
-      // 🚀 CEK AFILIASI: Hitung Ujrah 10%
-      const refPhone = pendingTransaction.fundraiserPhone; // Sinkron dengan field pelacak fundraiserPhone
-      if (refPhone) {
-        // Cek variasi format nomor di DB relawan (lokal maupun internasional)
-        let formattedRefPhone = refPhone.replace(/[^0-9]/g, '');
-        let alternativeRefPhone = formattedRefPhone;
-        
-        if (formattedRefPhone.startsWith('0')) {
-          alternativeRefPhone = '62' + formattedRefPhone.slice(1);
-        } else if (formattedRefPhone.startsWith('62')) {
-          alternativeRefPhone = '0' + formattedRefPhone.slice(2);
-        }
-
-        const fundraiser = await client.fetch(
-          `*[_type == "fundraiser" && (phone == $phone || phone == $altPhone)][0]`, 
-          { phone: refPhone.trim(), altPhone: alternativeRefPhone }
-        );
-
-        if (fundraiser) {
-          const ujrah = donationAmount * 0.1;
-          await client.patch(fundraiser._id)
-            .setIfMissing({ totalDanaDihimpun: 0, sisaSaldoFee: 0, totalTransaksiSukses: 0 })
-            .inc({ totalDanaDihimpun: donationAmount, sisaSaldoFee: ujrah, totalTransaksiSukses: 1 })
-            .commit();
-          console.log(`✅ Ujrah Rp ${ujrah} berhasil ditambahkan ke saldo ${fundraiser.name}`);
-        }
-      }
-    }
-
-    // Update Progress Bar Program
-    await client.patch(finalProgram._id)
-      .setIfMissing({ collectedRaw: 0, donors: [] })
-      .inc({ collectedRaw: donationAmount }) 
-      .append('donors', [{
-        _key: `donor-${cleanOrderId}-${Math.random().toString(36).substring(2, 5)}`,
-        orderId: cleanOrderId,
-        name: donorNameFromForm,
-        amount: donationAmount,
-        date: currentDate
-      }])
-      .commit();
-
-    // 📊 Catat Mutasi ke Google Sheets
-    await appendToGoogleSheets({ 
-      date: currentDate, 
-      orderId: cleanOrderId, 
-      name: donorNameFromForm, 
-      phone: donorPhoneFromForm, 
-      amount: donationAmount, 
-      program: finalProgram.title 
-    });
-
-    // ===================================================================
-    // 📲 NOTIFIKASI WHATSAPP PREMIUM VIA FONNTE
-    // ===================================================================
-    if (donorPhoneFromForm) {
-      let formattedPhone = donorPhoneFromForm.replace(/[^0-9]/g, '');
-      if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.slice(1);
-      
-      // 🚀 TEMPLATE KUITANSI PREMIUM WHATSAPP
-      const messageText = `*DONASI BERHASIL DITERIMA* 🎉
-  
-Jazakumullah khairan, Kak *${donorNameFromForm}*. Donasi Anda telah berhasil kami verifikasi dengan detail berikut:
-
-📝 *No. Invoice:* ${cleanOrderId}
-📌 *Program:* ${finalProgram.title}
-💰 *Nominal:* Rp ${donationAmount.toLocaleString('id-ID')}
-💳 *Metode:* ${paymentMethodUsed}
-⏰ *Tanggal:* ${currentDate} - ${currentFullTime} WIB
-
-Semoga sedekah yang ditunaikan menjadi penggugur dosa, pembuka pintu rezeki, dan membawa keberkahan yang berlipat ganda untuk Anda beserta keluarga. Aamiin Yaa Rabbal 'Aalamiin.
+Semoga Allah menerima amal kebaikan ini, melapangkan rezeki, dan memberikan keberkahan untuk Anda beserta keluarga. Aamiin.
 
 ----------------------------
 *Asyiqul Quran*
-_Salurkan kepedulian Anda secara amanah & transparan_`;
+_Amanah dalam menyalurkan kebaikan_`;
 
-      try {
-        await fetch('https://api.fonnte.com/send', {
+    const response =
+      await fetch(
+        'https://api.fonnte.com/send',
+        {
           method: 'POST',
-          headers: { 'Authorization': process.env.FONNTE_TOKEN || '' },
-          body: new URLSearchParams({ target: formattedPhone, message: messageText }),
-        });
-      } catch (err) { 
-        console.error('🔥 Fonnte error:', err); 
-      }
+
+          headers: {
+            Authorization: token,
+          },
+
+          body: new URLSearchParams({
+            target: phone,
+            message,
+          }),
+
+          cache: 'no-store',
+        }
+      );
+
+    if (!response.ok) {
+      const responseText =
+        await response.text();
+
+      console.error(
+        '🔥 FONNTE RESPONSE ERROR:',
+        response.status,
+        responseText
+      );
+
+      return;
     }
 
-    return NextResponse.json({ success: true, message: "Sukses diproses." });
+    console.log(
+      `📲 WHATSAPP BERHASIL: ${data.orderId}`
+    );
+  } catch (error) {
+    console.error(
+      '🔥 FONNTE ERROR:',
+      error
+    );
+  }
+}
 
+// ============================================================================
+// WEBHOOK PAKASIR V2
+// ============================================================================
+
+export async function POST(
+  request: Request
+) {
+  try {
+    // ========================================================================
+    // 1. CEK ENV
+    // ========================================================================
+
+    if (!SANITY_TOKEN) {
+      console.error(
+        '❌ SANITY_API_WRITE_TOKEN belum dikonfigurasi.'
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Konfigurasi Sanity belum lengkap.',
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (!PAKASIR_WEBHOOK_SECRET) {
+      console.error(
+        '❌ PAKASIR_WEBHOOK_SECRET belum dikonfigurasi.'
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Konfigurasi webhook belum lengkap.',
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 2. VERIFIKASI X-SECRET
+    // ========================================================================
+
+    const incomingSecret =
+      request.headers.get('x-secret') || '';
+
+    if (
+      !incomingSecret ||
+      incomingSecret !==
+        PAKASIR_WEBHOOK_SECRET
+    ) {
+      console.error(
+        '❌ WEBHOOK DITOLAK: X-Secret tidak cocok.'
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Unauthorized webhook.',
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 3. BACA PAYLOAD
+    // ========================================================================
+
+    const payload =
+      await request.json();
+
+    const txnId =
+      String(
+        payload?.txn_id || ''
+      ).trim();
+
+    const orderId =
+      String(
+        payload?.order_id || ''
+      ).trim();
+
+    const amount =
+      safeNumber(
+        payload?.amount
+      );
+
+    const status =
+      String(
+        payload?.status || ''
+      )
+        .toLowerCase()
+        .trim();
+
+    const completedAt =
+      String(
+        payload?.completed_at || ''
+      ).trim();
+
+    const isSandbox =
+      Boolean(
+        payload?.is_sandbox
+      );
+
+    console.log(
+      '📥 PAKASIR V2 WEBHOOK:',
+      {
+        txnId,
+        orderId,
+        amount,
+        status,
+        isSandbox,
+      }
+    );
+
+    // ========================================================================
+    // 4. VALIDASI PAYLOAD
+    // ========================================================================
+
+    if (!txnId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'txn_id tidak ditemukan.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!orderId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'order_id tidak ditemukan.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (amount <= 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Nominal transaksi tidak valid.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 5. HANYA COMPLETED
+    // ========================================================================
+
+    if (
+      status !== 'completed'
+    ) {
+      console.warn(
+        `⚠️ Status webhook diabaikan: ${status}`
+      );
+
+      return NextResponse.json({
+        success: true,
+        message:
+          `Status ${status || '-'} diabaikan.`,
+      });
+    }
+
+    // ========================================================================
+    // 6. CARI TRANSAKSI SANITY
+    // ========================================================================
+
+    const transaction =
+      await client.fetch<
+        DonationTransaction | null
+      >(
+        `
+        *[
+          _type == "donationTransaction"
+          &&
+          (
+            txnId == $txnId
+            ||
+            orderId == $orderId
+          )
+        ][0]{
+          _id,
+          _rev,
+          txnId,
+          orderId,
+          donorName,
+          donorPhone,
+          amount,
+          status,
+          slug,
+          paymentMethod,
+          fundraiserPhone
+        }
+        `,
+        {
+          txnId,
+          orderId,
+        }
+      );
+
+    if (!transaction) {
+      console.error(
+        `❌ TRANSAKSI TIDAK DITEMUKAN: ${orderId}`
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Transaksi tidak ditemukan.',
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 7. VALIDASI txn_id
+    // ========================================================================
+
+    if (
+      transaction.txnId &&
+      transaction.txnId !== txnId
+    ) {
+      console.error(
+        '❌ TXN ID TIDAK COCOK:',
+        {
+          webhook: txnId,
+          sanity: transaction.txnId,
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Txn ID tidak cocok.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 8. VALIDASI ORDER ID
+    // ========================================================================
+
+    if (
+      transaction.orderId !==
+      orderId
+    ) {
+      console.error(
+        '❌ ORDER ID TIDAK COCOK:',
+        {
+          webhook: orderId,
+          sanity:
+            transaction.orderId,
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Order ID tidak cocok.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 9. VALIDASI NOMINAL
+    // ========================================================================
+
+    const localAmount =
+      safeNumber(
+        transaction.amount
+      );
+
+    if (
+      localAmount !==
+      amount
+    ) {
+      console.error(
+        '❌ NOMINAL TIDAK COCOK:',
+        {
+          webhookAmount:
+            amount,
+
+          localAmount,
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Nominal transaksi tidak cocok.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 10. IDEMPOTENCY
+    // ========================================================================
+
+    if (
+      transaction.status ===
+      'success' ||
+      transaction.status ===
+      'completed'
+    ) {
+      console.log(
+        `ℹ️ TRANSAKSI SUDAH DIPROSES: ${orderId}`
+      );
+
+      return NextResponse.json({
+        success: true,
+        message:
+          'Transaksi sudah diproses sebelumnya.',
+      });
+    }
+
+    // ========================================================================
+    // 11. DATA DONATUR
+    // ========================================================================
+
+    const donorName =
+      String(
+        transaction.donorName ||
+          'Hamba Allah'
+      ).trim();
+
+    const donorPhone =
+      String(
+        transaction.donorPhone ||
+          ''
+      ).trim();
+
+    const programSlug =
+      String(
+        transaction.slug ||
+          ''
+      )
+        .toLowerCase()
+        .trim();
+
+    const paymentMethod =
+      String(
+        transaction.paymentMethod ||
+          'QRIS'
+      )
+        .toUpperCase()
+        .trim();
+
+    if (!programSlug) {
+      throw new Error(
+        'Slug program tidak ditemukan pada transaksi.'
+      );
+    }
+
+    // ========================================================================
+    // 12. CARI PROGRAM
+    // ========================================================================
+
+    const program =
+      await client.fetch<
+        ProgramDocument | null
+      >(
+        `
+        *[
+          _type == "program"
+          &&
+          slug.current == $slug
+        ][0]{
+          _id,
+          title
+        }
+        `,
+        {
+          slug:
+            programSlug,
+        }
+      );
+
+    if (!program) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            `Program ${programSlug} tidak ditemukan.`,
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    // ========================================================================
+    // 13. WAKTU
+    // ========================================================================
+
+    const now =
+      completedAt
+        ? new Date(completedAt)
+        : new Date();
+
+    const currentDate =
+      now.toLocaleDateString(
+        'id-ID',
+        {
+          timeZone:
+            'Asia/Jakarta',
+
+          day:
+            'numeric',
+
+          month:
+            'long',
+
+          year:
+            'numeric',
+        }
+      );
+
+    const currentTime =
+      now.toLocaleTimeString(
+        'id-ID',
+        {
+          timeZone:
+            'Asia/Jakarta',
+
+          hour:
+            '2-digit',
+
+          minute:
+            '2-digit',
+
+          hour12:
+            false,
+        }
+      );
+
+    // ========================================================================
+    // 14. FUNDRAISER
+    // ========================================================================
+
+    let fundraiser:
+      FundraiserDocument | null =
+      null;
+
+    const fundraiserPhone =
+      String(
+        transaction.fundraiserPhone ||
+          ''
+      ).trim();
+
+    if (fundraiserPhone) {
+      const internationalPhone =
+        normalizePhone(
+          fundraiserPhone
+        );
+
+      const localNumber =
+        localPhone(
+          fundraiserPhone
+        );
+
+      fundraiser =
+        await client.fetch<
+          FundraiserDocument | null
+        >(
+          `
+          *[
+            _type == "fundraiser"
+            &&
+            (
+              phone == $raw
+              ||
+              phone == $international
+              ||
+              phone == $local
+            )
+          ][0]{
+            _id,
+            name,
+            phone
+          }
+          `,
+          {
+            raw:
+              fundraiserPhone,
+
+            international:
+              internationalPhone,
+
+            local:
+              localNumber,
+          }
+        );
+    }
+
+    // ========================================================================
+    // 15. SANITY ATOMIC TRANSACTION
+    // ========================================================================
+
+    const donorKey =
+      `donor-${orderId}`
+        .replace(
+          /[^a-zA-Z0-9_-]/g,
+          '-'
+        )
+        .slice(
+          0,
+          100
+        );
+
+    let sanityTransaction =
+      client.transaction();
+
+    // ------------------------------------------------------------------------
+    // Update transaksi pembayaran
+    // ------------------------------------------------------------------------
+
+    sanityTransaction =
+      sanityTransaction.patch(
+        transaction._id,
+        (patch) =>
+          patch
+            .ifRevisionId(
+              transaction._rev
+            )
+            .set({
+              txnId,
+              status:
+                'success',
+
+              gatewayStatus:
+                'completed',
+
+              completedAt:
+                completedAt ||
+                new Date().toISOString(),
+
+              paidAt:
+                completedAt ||
+                new Date().toISOString(),
+
+              isSandbox,
+            })
+      );
+
+    // ------------------------------------------------------------------------
+    // Update nominal program + donor
+    // ------------------------------------------------------------------------
+
+    sanityTransaction =
+      sanityTransaction.patch(
+        program._id,
+        (patch) =>
+          patch
+            .setIfMissing({
+              collectedRaw: 0,
+              donors: [],
+            })
+
+            .inc({
+              collectedRaw:
+                amount,
+            })
+
+            .append(
+              'donors',
+              [
+                {
+                  _key:
+                    donorKey,
+
+                  _type:
+                    'donor',
+
+                  orderId,
+
+                  txnId,
+
+                  name:
+                    donorName,
+
+                  amount,
+
+                  date:
+                    currentDate,
+
+                  paymentMethod,
+                },
+              ]
+            )
+      );
+
+    // ------------------------------------------------------------------------
+    // Fundraiser / ujrah
+    // ------------------------------------------------------------------------
+
+    if (fundraiser) {
+      const ujrah =
+        Math.round(
+          amount * 0.1
+        );
+
+      sanityTransaction =
+        sanityTransaction.patch(
+          fundraiser._id,
+          (patch) =>
+            patch
+              .setIfMissing({
+                totalDanaDihimpun:
+                  0,
+
+                sisaSaldoFee:
+                  0,
+
+                totalTransaksiSukses:
+                  0,
+              })
+
+              .inc({
+                totalDanaDihimpun:
+                  amount,
+
+                sisaSaldoFee:
+                  ujrah,
+
+                totalTransaksiSukses:
+                  1,
+              })
+        );
+
+      console.log(
+        `💸 UJRAH Rp ${formatRupiah(ujrah)} → ${fundraiser.name || fundraiser.phone}`
+      );
+    }
+
+    // ========================================================================
+    // 16. COMMIT
+    // ========================================================================
+
+    try {
+      await sanityTransaction.commit({
+        visibility: 'sync',
+      });
+    } catch (commitError) {
+      console.error(
+        '🔥 SANITY TRANSACTION ERROR:',
+        commitError
+      );
+
+      // ======================================================================
+      // Cek apakah webhook lain sudah menyelesaikannya
+      // ======================================================================
+
+      const refreshed =
+        await client.fetch<{
+          status?: string;
+        } | null>(
+          `
+          *[
+            _type == "donationTransaction"
+            &&
+            _id == $id
+          ][0]{
+            status
+          }
+          `,
+          {
+            id:
+              transaction._id,
+          }
+        );
+
+      if (
+        refreshed?.status ===
+          'success'
+      ) {
+        return NextResponse.json({
+          success: true,
+          message:
+            'Transaksi sudah diproses oleh webhook lain.',
+        });
+      }
+
+      throw commitError;
+    }
+
+    console.log(
+      `✅ PAKASIR V2 COMPLETED: ${orderId}`
+    );
+
+    // ========================================================================
+    // 17. GOOGLE SHEET
+    // ========================================================================
+
+    await appendToGoogleSheets({
+      date:
+        `${currentDate} ${currentTime}`,
+
+      orderId,
+
+      txnId,
+
+      name:
+        donorName,
+
+      phone:
+        donorPhone,
+
+      amount,
+
+      program:
+        program.title ||
+        programSlug,
+    });
+
+    // ========================================================================
+    // 18. WHATSAPP
+    // ========================================================================
+
+    if (donorPhone) {
+      await sendWhatsappReceipt({
+        phone:
+          donorPhone,
+
+        donorName,
+
+        orderId,
+
+        programName:
+          program.title ||
+          programSlug,
+
+        amount,
+
+        paymentMethod,
+
+        date:
+          currentDate,
+
+        time:
+          currentTime,
+      });
+    }
+
+    // ========================================================================
+    // 19. RESPONSE WAJIB 200
+    // ========================================================================
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        message:
+          'Webhook Pakasir berhasil diproses.',
+
+        data: {
+          txnId,
+          orderId,
+          amount,
+          status:
+            'completed',
+        },
+      },
+      {
+        status: 200,
+      }
+    );
   } catch (error: any) {
-    console.error('🔥 CRITICAL WEBHOOK ERROR:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error(
+      '🔥 CRITICAL PAKASIR WEBHOOK ERROR:',
+      {
+        message:
+          error?.message,
+
+        statusCode:
+          error?.statusCode,
+
+        responseBody:
+          error?.response?.body,
+      }
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+
+        error:
+          error?.message ||
+          'Terjadi kesalahan ketika memproses webhook.',
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
