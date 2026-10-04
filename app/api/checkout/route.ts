@@ -21,7 +21,7 @@ const pakasirApiKey =
   process.env.PAKASIR_API_KEY || '';
 
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
   'https://www.asyiq.ponpes.id';
 
 // ==========================================================
@@ -61,25 +61,17 @@ type PaymentMethod =
 
 interface PakasirCreateResponse {
   txn_id?: string;
-
   project?: string;
   order_id?: string;
-
   amount?: number;
   fee?: number;
   total_payment?: number;
-
   payment_method?: string;
-
   qr_string?: string;
   va_number?: string;
-
   expired_at?: string;
-
   payment_link?: string;
-
   is_sandbox?: boolean;
-
   message?: string;
   error?: string;
 }
@@ -116,39 +108,28 @@ function isValidPaymentMethod(
 function getMinimumAmount(
   method: PaymentMethod
 ): number {
-  if (
-    method === 'payment_link' ||
-    method === 'qris'
-  ) {
-    return 500;
-  }
-
-  return 10000;
+  return method === 'payment_link' || method === 'qris'
+    ? 500
+    : 10000;
 }
 
 function getMaximumAmount(
   method: PaymentMethod
 ): number {
-  if (method === 'qris') {
-    return 10000000;
-  }
-
-  return 50000000;
+  return method === 'qris'
+    ? 10_000_000
+    : 50_000_000;
 }
 
-function formatRupiah(value: number) {
-  return new Intl.NumberFormat(
-    'id-ID'
-  ).format(value);
+function formatRupiah(value: number): string {
+  return new Intl.NumberFormat('id-ID').format(value);
 }
 
 // ==========================================================
-// POST CHECKOUT
+// POST
 // ==========================================================
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
     // ======================================================
     // ENV VALIDATION
@@ -162,12 +143,9 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Konfigurasi Sanity server belum lengkap.',
+          error: 'Konfigurasi Sanity server belum lengkap.',
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
@@ -179,75 +157,59 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Konfigurasi Pakasir belum lengkap.',
+          error: 'Konfigurasi Pakasir belum lengkap.',
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     // ======================================================
-    // REQUEST BODY
+    // REQUEST
     // ======================================================
 
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const slug =
-      String(
-        body?.slug || ''
-      ).trim();
+    const slug = String(
+      body?.slug || ''
+    ).trim();
 
-    const donorName =
-      String(
-        body?.donorName ||
-        body?.name ||
-        'Hamba Allah'
-      ).trim();
+    const donorName = String(
+      body?.donorName ||
+      body?.name ||
+      'Hamba Allah'
+    ).trim();
 
-    const donorPhone =
-      String(
-        body?.donorPhone ||
-        body?.phone ||
-        body?.whatsapp ||
-        ''
-      ).trim();
+    const donorPhone = String(
+      body?.donorPhone ||
+      body?.phone ||
+      body?.whatsapp ||
+      ''
+    ).trim();
 
-    const fundraiserPhone =
-      String(
-        body?.fundraiserPhone ||
-        body?.referral ||
-        ''
-      ).trim();
+    const fundraiserPhone = String(
+      body?.fundraiserPhone ||
+      body?.referral ||
+      ''
+    ).trim();
 
     // ======================================================
     // PAYMENT METHOD
     // ======================================================
 
-    const cleanMethod =
-      String(
-        body?.paymentMethod ||
-        'qris'
-      )
-        .toLowerCase()
-        .trim();
+    const cleanMethod = String(
+      body?.paymentMethod || 'qris'
+    )
+      .toLowerCase()
+      .trim();
 
-    if (
-      !isValidPaymentMethod(
-        cleanMethod
-      )
-    ) {
+    if (!isValidPaymentMethod(cleanMethod)) {
       return NextResponse.json(
         {
           success: false,
           error:
             `Metode pembayaran "${cleanMethod}" tidak tersedia.`,
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -260,74 +222,53 @@ export async function POST(
       body?.nominal ??
       0;
 
-    const cleanAmountNumber =
-      Number(
-        String(rawAmount)
-          .replace(/\D/g, '')
-      );
+    const cleanAmountNumber = Number(
+      String(rawAmount).replace(/\D/g, '')
+    );
 
     if (
       !slug ||
-      !Number.isFinite(
-        cleanAmountNumber
-      ) ||
+      !Number.isFinite(cleanAmountNumber) ||
       cleanAmountNumber <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Data donasi tidak valid.',
+          error: 'Data donasi tidak valid.',
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     // ======================================================
-    // VALIDASI NOMINAL BERDASARKAN METODE
+    // AMOUNT LIMIT
     // ======================================================
 
     const minimumAmount =
-      getMinimumAmount(
-        cleanMethod
-      );
+      getMinimumAmount(cleanMethod);
 
     const maximumAmount =
-      getMaximumAmount(
-        cleanMethod
-      );
+      getMaximumAmount(cleanMethod);
 
-    if (
-      cleanAmountNumber <
-      minimumAmount
-    ) {
+    if (cleanAmountNumber < minimumAmount) {
       return NextResponse.json(
         {
           success: false,
           error:
             `Minimal pembayaran untuk ${cleanMethod.toUpperCase()} adalah Rp ${formatRupiah(minimumAmount)}.`,
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (
-      cleanAmountNumber >
-      maximumAmount
-    ) {
+    if (cleanAmountNumber > maximumAmount) {
       return NextResponse.json(
         {
           success: false,
           error:
             `Maksimal pembayaran untuk ${cleanMethod.toUpperCase()} adalah Rp ${formatRupiah(maximumAmount)}.`,
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -335,33 +276,21 @@ export async function POST(
     // ORDER ID
     // ======================================================
 
-    const cleanSlug =
-      slug.toUpperCase();
+    const cleanSlug = slug.toUpperCase();
 
-    let prefix =
-      'ASYIQ';
+    let prefix = 'ASYIQ';
 
-    if (
-      cleanSlug.includes(
-        'ASRAMA'
-      )
-    ) {
-      prefix =
-        'ASRAMA';
-    } else if (
-      cleanSlug.includes(
-        'SANTRI'
-      )
-    ) {
-      prefix =
-        'SANTRI';
+    if (cleanSlug.includes('ASRAMA')) {
+      prefix = 'ASRAMA';
+    } else if (cleanSlug.includes('SANTRI')) {
+      prefix = 'SANTRI';
     }
 
     const generatedOrderId =
       `INV-${prefix}-${Date.now()}`;
 
     // ======================================================
-    // PAKASIR V2 ENDPOINT
+    // PAKASIR V2
     // ======================================================
 
     const targetPakasirUrl =
@@ -370,48 +299,34 @@ export async function POST(
       `${encodeURIComponent(generatedOrderId)}`;
 
     console.log(
-      `💳 Membuat transaksi Pakasir v2: ${generatedOrderId}`
+      '💳 PAKASIR V2 CREATE:',
+      {
+        orderId: generatedOrderId,
+        amount: cleanAmountNumber,
+        method: cleanMethod,
+      }
     );
 
-    // ======================================================
-    // CREATE TRANSACTION PAKASIR V2
-    // ======================================================
+    const pakasirResponse = await fetch(
+      targetPakasirUrl,
+      {
+        method: 'POST',
 
-    const pakasirResponse =
-      await fetch(
-        targetPakasirUrl,
-        {
-          method:
-            'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': pakasirApiKey,
+        },
 
-          headers: {
-            'Content-Type':
-              'application/json',
+        body: JSON.stringify({
+          method: cleanMethod,
+          amount: cleanAmountNumber,
+        }),
 
-            'X-Api-Key':
-              pakasirApiKey,
-          },
+        cache: 'no-store',
+      }
+    );
 
-          body:
-            JSON.stringify({
-              method:
-                cleanMethod,
-
-              amount:
-                cleanAmountNumber,
-            }),
-
-          cache:
-            'no-store',
-        }
-      );
-
-    // ======================================================
-    // READ RESPONSE
-    // ======================================================
-
-    let pakasirData:
-      PakasirCreateResponse;
+    let pakasirData: PakasirCreateResponse;
 
     try {
       pakasirData =
@@ -422,36 +337,26 @@ export async function POST(
       );
     }
 
-    if (
-      !pakasirResponse.ok
-    ) {
+    if (!pakasirResponse.ok) {
       console.error(
         '🔥 PAKASIR V2 ERROR:',
-        {
-          status:
-            pakasirResponse.status,
-
-          data:
-            pakasirData,
-        }
+        pakasirData
       );
 
       throw new Error(
         pakasirData?.message ||
         pakasirData?.error ||
-        `Gagal membuat transaksi Pakasir. HTTP ${pakasirResponse.status}`
+        `Pakasir HTTP ${pakasirResponse.status}`
       );
     }
 
     // ======================================================
-    // VALIDATE TXN ID
+    // TXN ID
     // ======================================================
 
-    const txnId =
-      String(
-        pakasirData?.txn_id ||
-        ''
-      ).trim();
+    const txnId = String(
+      pakasirData?.txn_id || ''
+    ).trim();
 
     if (!txnId) {
       throw new Error(
@@ -460,13 +365,12 @@ export async function POST(
     }
 
     // ======================================================
-    // VALIDATE RESPONSE
+    // VALIDATION RESPONSE
     // ======================================================
 
     if (
       pakasirData.order_id &&
-      pakasirData.order_id !==
-        generatedOrderId
+      pakasirData.order_id !== generatedOrderId
     ) {
       throw new Error(
         'Order ID response Pakasir tidak cocok.'
@@ -474,11 +378,9 @@ export async function POST(
     }
 
     if (
-      pakasirData.amount !==
-        undefined &&
-      Number(
-        pakasirData.amount
-      ) !== cleanAmountNumber
+      pakasirData.amount !== undefined &&
+      Number(pakasirData.amount) !==
+        cleanAmountNumber
     ) {
       throw new Error(
         'Nominal response Pakasir tidak cocok.'
@@ -487,8 +389,7 @@ export async function POST(
 
     if (
       pakasirData.project &&
-      pakasirData.project !==
-        pakasirProjectSlug
+      pakasirData.project !== pakasirProjectSlug
     ) {
       throw new Error(
         'Project Pakasir tidak cocok.'
@@ -499,64 +400,50 @@ export async function POST(
     // PAYMENT DATA
     // ======================================================
 
-    const fee =
-      Number(
-        pakasirData.fee || 0
-      );
+    const fee = Number(
+      pakasirData.fee || 0
+    );
 
-    const totalPayment =
-      Number(
-        pakasirData.total_payment ||
-        cleanAmountNumber
-      );
+    const totalPayment = Number(
+      pakasirData.total_payment ||
+      cleanAmountNumber
+    );
 
-    const paymentMethod =
-      String(
-        pakasirData.payment_method ||
-        cleanMethod
-      );
+    const paymentMethod = String(
+      pakasirData.payment_method ||
+      cleanMethod
+    );
 
-    const qrString =
-      String(
-        pakasirData.qr_string ||
-        ''
-      );
+    const qrString = String(
+      pakasirData.qr_string || ''
+    );
 
-    const vaNumber =
-      String(
-        pakasirData.va_number ||
-        ''
-      );
+    const vaNumber = String(
+      pakasirData.va_number || ''
+    );
 
     const expiredAt =
       pakasirData.expired_at
-        ? String(
-            pakasirData.expired_at
-          )
+        ? String(pakasirData.expired_at)
         : null;
 
     const isSandbox =
-      Boolean(
-        pakasirData.is_sandbox
-      );
+      Boolean(pakasirData.is_sandbox);
 
     // ======================================================
     // PAYMENT URL
     // ======================================================
 
     const redirectUrl =
-      `${siteUrl}/thank-you?order_id=${encodeURIComponent(generatedOrderId)}`;
+      `${siteUrl}/thank-you?order_id=` +
+      encodeURIComponent(generatedOrderId);
 
     let paymentUrl = '';
 
-    if (
-      cleanMethod ===
-      'payment_link'
-    ) {
+    if (cleanMethod === 'payment_link') {
       const rawPaymentLink =
         String(
-          pakasirData.payment_link ||
-          ''
+          pakasirData.payment_link || ''
         ).trim();
 
       if (!rawPaymentLink) {
@@ -572,20 +459,14 @@ export async function POST(
 
       paymentUrl =
         `${rawPaymentLink}` +
-        `${separator}redirect=${encodeURIComponent(redirectUrl)}`;
-
+        `${separator}redirect=` +
+        encodeURIComponent(redirectUrl);
     } else {
       const params =
         new URLSearchParams();
 
-      if (
-        cleanMethod ===
-        'qris'
-      ) {
-        params.set(
-          'qris_only',
-          '1'
-        );
+      if (cleanMethod === 'qris') {
+        params.set('qris_only', '1');
       }
 
       params.set(
@@ -594,12 +475,13 @@ export async function POST(
       );
 
       paymentUrl =
-        `https://app.pakasir.com/pay-v2/${encodeURIComponent(txnId)}` +
+        `https://app.pakasir.com/pay-v2/` +
+        `${encodeURIComponent(txnId)}` +
         `?${params.toString()}`;
     }
 
     // ======================================================
-    // LOCAL WIB TIME
+    // TIME
     // ======================================================
 
     const createdAtIso =
@@ -609,14 +491,9 @@ export async function POST(
       new Date().toLocaleString(
         'id-ID',
         {
-          timeZone:
-            'Asia/Jakarta',
-
-          dateStyle:
-            'medium',
-
-          timeStyle:
-            'medium',
+          timeZone: 'Asia/Jakarta',
+          dateStyle: 'medium',
+          timeStyle: 'medium',
         }
       );
 
@@ -624,209 +501,128 @@ export async function POST(
     // SAVE SANITY
     // ======================================================
 
-    try {
-      const createdTransaction =
-        await client.create({
-          _type:
-            'donationTransaction',
+    await client.create({
+      _type: 'donationTransaction',
 
-          // Pakasir
-          txnId:
-            txnId,
+      txnId,
+      orderId: generatedOrderId,
 
-          orderId:
-            generatedOrderId,
+      pakasirProject:
+        pakasirProjectSlug,
 
-          pakasirProject:
-            pakasirProjectSlug,
+      donorName,
+      donorPhone,
 
-          // Donor
-          donorName:
-            donorName,
+      slug,
 
-          donorPhone:
-            donorPhone,
+      amount:
+        cleanAmountNumber,
 
-          // Program
-          slug:
-            slug,
+      fee,
+      totalAmount:
+        totalPayment,
 
-          // Amount
-          amount:
-            cleanAmountNumber,
+      paymentMethod,
+      paymentUrl,
 
-          fee:
-            fee,
+      qrString,
+      vaNumber,
+      paymentNumber:
+        vaNumber || qrString,
 
-          totalAmount:
-            totalPayment,
+      expiredAt,
+      isSandbox,
 
-          // Payment
-          paymentMethod:
-            paymentMethod,
+      status: 'pending',
+      gatewayStatus: 'pending',
 
-          paymentUrl:
-            paymentUrl,
+      fundraiserPhone,
 
-          qrString:
-            qrString,
+      createdAt:
+        createdAtIso,
 
-          vaNumber:
-            vaNumber,
+      createdAtWib:
+        currentWibTimestamp,
+    });
 
-          expiredAt:
-            expiredAt,
-
-          isSandbox:
-            isSandbox,
-
-          // Status
-          status:
-            'pending',
-
-          gatewayStatus:
-            'pending',
-
-          // Referral
-          fundraiserPhone:
-            fundraiserPhone,
-
-          // Time
-          createdAt:
-            createdAtIso,
-
-          createdAtWib:
-            currentWibTimestamp,
-        });
-
-      console.log(
-        `✅ TRANSAKSI SANITY TERSIMPAN: ${createdTransaction._id}`
-      );
-    } catch (
-      sanityError: any
-    ) {
-      console.error(
-        '🔥 SANITY CREATE ERROR:',
-        {
-          message:
-            sanityError?.message,
-
-          statusCode:
-            sanityError?.statusCode,
-
-          projectId,
-          dataset,
-
-          tokenAvailable:
-            Boolean(
-              sanityToken
-            ),
-        }
-      );
-
-      throw new Error(
-        `Gagal menyimpan transaksi ke Sanity: ${
-          sanityError?.message ||
-          'Unknown Sanity error'
-        }`
-      );
-    }
+    console.log(
+      `✅ TRANSAKSI SANITY TERSIMPAN: ${generatedOrderId}`
+    );
 
     // ======================================================
-    // GOOGLE SHEET - PENDING
+    // GOOGLE SHEET PENDING
     // ======================================================
 
     const googleSheetScriptUrl =
-      process.env
-        .GOOGLE_SHEET_WEBHOOK_URL ||
+      process.env.GOOGLE_SHEET_WEBHOOK_URL?.trim() ||
       '';
 
-    if (
-      googleSheetScriptUrl.trim()
-    ) {
+    if (googleSheetScriptUrl) {
       try {
         await fetch(
-          googleSheetScriptUrl.trim(),
+          googleSheetScriptUrl,
           {
-            method:
-              'POST',
+            method: 'POST',
 
             headers: {
               'Content-Type':
                 'application/json',
             },
 
-            body:
-              JSON.stringify({
-                txnId:
-                  txnId,
+            body: JSON.stringify({
+              txnId,
+              orderId:
+                generatedOrderId,
 
-                orderId:
-                  generatedOrderId,
+              donorName,
+              donorPhone:
+                donorPhone
+                  ? `'${donorPhone}`
+                  : '',
 
-                donorName:
-                  donorName,
+              amount:
+                cleanAmountNumber,
 
-                donorPhone:
-                  donorPhone
-                    ? `'${donorPhone}`
-                    : '',
+              fee,
+              totalPayment,
 
-                amount:
-                  cleanAmountNumber,
+              programSlug:
+                slug,
 
-                fee:
-                  fee,
+              paymentMethod,
 
-                totalPayment:
-                  totalPayment,
+              fundraiserPhone:
+                fundraiserPhone
+                  ? `'${fundraiserPhone}`
+                  : '-',
 
-                programSlug:
-                  slug,
+              status: 'pending',
 
-                paymentMethod:
-                  paymentMethod,
+              expiredAt,
 
-                fundraiserPhone:
-                  fundraiserPhone
-                    ? `'${fundraiserPhone}`
-                    : '-',
+              createdAt:
+                currentWibTimestamp,
+            }),
 
-                status:
-                  'pending',
-
-                expiredAt:
-                  expiredAt,
-
-                createdAt:
-                  currentWibTimestamp,
-              }),
+            cache: 'no-store',
           }
         );
-
-        console.log(
-          `📊 GOOGLE SHEET PENDING TERCATAT: ${generatedOrderId}`
-        );
-      } catch (
-        sheetError
-      ) {
+      } catch (error) {
         console.error(
           '⚠️ GOOGLE SHEET ERROR:',
-          sheetError
+          error
         );
       }
     }
 
     // ======================================================
-    // RESPONSE TO FRONTEND
+    // RESPONSE
     // ======================================================
 
     return NextResponse.json({
-      success:
-        true,
+      success: true,
 
-      txnId:
-        txnId,
+      txnId,
 
       orderId:
         generatedOrderId,
@@ -834,68 +630,43 @@ export async function POST(
       amount:
         cleanAmountNumber,
 
-      fee:
-        fee,
+      fee,
 
-      totalPayment:
-        totalPayment,
+      totalPayment,
 
-      paymentMethod:
-        paymentMethod,
+      paymentMethod,
 
-      paymentUrl:
-        paymentUrl,
+      paymentUrl,
 
-      qrString:
-        qrString,
+      qrString,
 
-      vaNumber:
-        vaNumber,
+      vaNumber,
 
-      expiredAt:
-        expiredAt,
-
-      isSandbox:
-        isSandbox,
-
-      // Untuk kompatibilitas frontend lama
       paymentNumber:
-        vaNumber,
+        vaNumber || qrString,
+
+      expiredAt,
+
+      isSandbox,
     });
 
-  } catch (
-    error: any
-  ) {
+  } catch (error: unknown) {
     console.error(
       '🔥 CHECKOUT ERROR:',
-      {
-        message:
-          error?.message,
-
-        statusCode:
-          error?.statusCode,
-
-        stack:
-          process.env.NODE_ENV ===
-          'development'
-            ? error?.stack
-            : undefined,
-      }
+      error
     );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Terjadi kesalahan saat membuat transaksi.';
 
     return NextResponse.json(
       {
-        success:
-          false,
-
-        error:
-          error?.message ||
-          'Terjadi kesalahan saat membuat transaksi.',
+        success: false,
+        error: message,
       },
-      {
-        status:
-          500,
-      }
+      { status: 500 }
     );
   }
 }
