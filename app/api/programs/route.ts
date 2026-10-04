@@ -1,63 +1,364 @@
 // app/api/programs/route.ts
-import { NextResponse } from 'next/server';
-// 🚀 OPTIMASI UTAMA: Menggunakan clientPublik dari utility lib yang mengaktifkan Edge CDN gratis
-import { clientPublik as client } from '@/lib/sanity';
 
-// 🚀 PROTEKSI 1: Set revalidate berwaktu (60 detik) agar Next.js tidak menembak Sanity setiap milidetik
+import { NextResponse } from 'next/server';
+import { createClient } from '@sanity/client';
+
+// ============================================================================
+// KONFIGURASI
+// ============================================================================
+//
+// PENTING:
+// Endpoint ini menampilkan nominal donasi.
+// Karena collectedRaw dapat berubah setelah pembayaran sukses,
+// JANGAN menggunakan Sanity CDN / cache lama di sini.
+//
+// ============================================================================
+
 export const dynamic = 'force-dynamic';
-export const revalidate = 60; 
+export const revalidate = 0;
+
+// ============================================================================
+// SANITY CLIENT
+// ============================================================================
+//
+// useCdn: false
+// = selalu membaca data terbaru dari Sanity.
+//
+// Tidak perlu SANITY_API_WRITE_TOKEN karena endpoint ini hanya membaca data.
+//
+// ============================================================================
+
+const client = createClient({
+  projectId:
+    process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ||
+    'lsnco71s',
+
+  dataset:
+    process.env.NEXT_PUBLIC_SANITY_DATASET ||
+    'production',
+
+  apiVersion: '2026-01-01',
+
+  useCdn: false,
+});
+
+// ============================================================================
+// HELPER
+// ============================================================================
+
+function safeNumber(
+  value: unknown,
+  fallback = 0
+): number {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return fallback;
+  }
+
+  return number;
+}
+
+// ============================================================================
+// GET PROGRAM
+// ============================================================================
 
 export async function GET() {
   try {
-    const query = `*[_type == "program"] | order(_createdAt desc) {
-      "id": _id,
-      "slug": slug.current,
-      title,
-      category,
-      "image": image.asset->url,
-      collectedRaw,
-      targetAmount,
-      description,
-      donors
-    }`;
+    // ========================================================================
+    // QUERY
+    // ========================================================================
+    //
+    // _id sengaja dikembalikan karena CampaignDetailClient menggunakan:
+    //
+    // program?._id || program?.id
+    //
+    // collectedRaw juga dibaca langsung dari Sanity.
+    //
+    // ========================================================================
 
-    // 🚀 PROTEKSI 2: Hapus properti no-store, biarkan mekanisme caching Next.js & CDN Sanity bekerja
-    const sanityPrograms = await client.fetch(query);
+    const query = `
+      *[_type == "program"]
+      | order(_createdAt desc)
+      {
+        _id,
 
-    const formattedData = sanityPrograms.map((program: any) => {
-      const rawAmount = Number(program.collectedRaw || 0);
-      const targetAmount = Number(program.targetAmount || 50000000);
+        "id": _id,
 
-      return {
-        id: program.id,
-        slug: program.slug,
-        title: program.title,
-        // 🚀 FIXED: Kembalikan fallback ke format reguler agar sinkron dengan data beranda dan skema baru
-        category: program.category || 'Kemanusiaan',
-        image: program.image || 'https://via.placeholder.com/385x176?text=No+Image',
-        collected: `Rp ${rawAmount.toLocaleString('id-ID')}`,
-        collectedRaw: rawAmount,
-        target: `Rp ${targetAmount.toLocaleString('id-ID')}`,
-        targetAmount: targetAmount,
-        description: program.description || null,
-        donors: program.donors || []
-      };
-    });
+        "slug": slug.current,
 
-    // 🚀 PROTEKSI 3: Gunakan Cache-Control tingkat server Next.js selama 60 detik
+        title,
+
+        category,
+
+        "image": image.asset->url,
+
+        collectedRaw,
+
+        targetAmount,
+
+        description,
+
+        donors,
+
+        reports
+      }
+    `;
+
+    // ========================================================================
+    // FETCH TANPA CDN
+    // ========================================================================
+    //
+    // Ini bagian paling penting untuk kasus:
+    //
+    // Sanity:
+    // status = Success
+    // gatewayStatus = completed
+    // collectedRaw = sudah bertambah
+    //
+    // tetapi website masih menampilkan Rp 0.
+    //
+    // useCdn:false memastikan request membaca data terbaru.
+    //
+    // ========================================================================
+
+    const sanityPrograms =
+      await client.fetch(
+        query,
+        {},
+        {
+          cache: 'no-store',
+          next: {
+            revalidate: 0,
+          },
+        }
+      );
+
+    // ========================================================================
+    // VALIDASI DATA
+    // ========================================================================
+
+    if (
+      !Array.isArray(
+        sanityPrograms
+      )
+    ) {
+      throw new Error(
+        'Data program dari Sanity tidak valid.'
+      );
+    }
+
+    // ========================================================================
+    // FORMAT DATA
+    // ========================================================================
+
+    const formattedData =
+      sanityPrograms.map(
+        (program: any) => {
+          const rawAmount =
+            safeNumber(
+              program?.collectedRaw,
+              0
+            );
+
+          const targetAmount =
+            safeNumber(
+              program?.targetAmount,
+              50_000_000
+            );
+
+          return {
+            // ================================================================
+            // IDENTITAS
+            // ================================================================
+
+            _id:
+              program?._id ||
+              null,
+
+            id:
+              program?.id ||
+              program?._id ||
+              null,
+
+            slug:
+              typeof program?.slug ===
+                'string'
+                ? program.slug
+                : '',
+
+            title:
+              typeof program?.title ===
+                'string'
+                ? program.title
+                : 'Program Donasi',
+
+            // ================================================================
+            // KATEGORI
+            // ================================================================
+
+            category:
+              typeof program?.category ===
+                'string' &&
+              program.category.trim()
+                ? program.category
+                : 'Kemanusiaan',
+
+            // ================================================================
+            // IMAGE
+            // ================================================================
+
+            image:
+              typeof program?.image ===
+                'string' &&
+              program.image.trim()
+                ? program.image
+                : '/images/placeholder.jpg',
+
+            // ================================================================
+            // DANA TERKUMPUL
+            // ================================================================
+
+            collected:
+              `Rp ${rawAmount.toLocaleString(
+                'id-ID'
+              )}`,
+
+            collectedRaw:
+              rawAmount,
+
+            // ================================================================
+            // TARGET
+            // ================================================================
+
+            target:
+              `Rp ${targetAmount.toLocaleString(
+                'id-ID'
+              )}`,
+
+            targetAmount:
+              targetAmount,
+
+            // ================================================================
+            // DESKRIPSI
+            // ================================================================
+
+            description:
+              program?.description ||
+              null,
+
+            // ================================================================
+            // DONATUR
+            // ================================================================
+
+            donors:
+              Array.isArray(
+                program?.donors
+              )
+                ? program.donors
+                : [],
+
+            // ================================================================
+            // LAPORAN
+            // ================================================================
+
+            reports:
+              Array.isArray(
+                program?.reports
+              )
+                ? program.reports
+                : [],
+          };
+        }
+      );
+
+    // ========================================================================
+    // RESPONSE
+    // ========================================================================
+    //
+    // JANGAN gunakan:
+    //
+    // s-maxage=60
+    //
+    // karena angka donasi harus segera berubah setelah webhook Pakasir
+    // memperbarui collectedRaw.
+    //
+    // ========================================================================
+
     return NextResponse.json(
-      { success: true, data: formattedData },
+      {
+        success: true,
+
+        data: formattedData,
+
+        meta: {
+          count:
+            formattedData.length,
+
+          fetchedAt:
+            new Date().toISOString(),
+        },
+      },
       {
         status: 200,
+
         headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
+          'Content-Type':
+            'application/json',
+
+          // Tidak boleh disimpan oleh browser/CDN.
+          'Cache-Control':
+            'no-store, no-cache, must-revalidate, proxy-revalidate',
+
+          Pragma:
+            'no-cache',
+
+          Expires:
+            '0',
         },
       }
     );
 
-  } catch (error: any) {
-    console.error('🔥 Sanity Fetch Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+
+    // ========================================================================
+    // ERROR HANDLING
+    // ========================================================================
+
+    console.error(
+      '🔥 [API PROGRAMS] Sanity Fetch Error:',
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Gagal mengambil data program dari Sanity.';
+
+    return NextResponse.json(
+      {
+        success: false,
+
+        error:
+          message,
+
+        data: [],
+      },
+      {
+        status: 500,
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          'Cache-Control':
+            'no-store',
+          },
+        }
+      }
+    );
   }
 }

@@ -1,49 +1,352 @@
 // app/api/campaign/[slug]/route.ts
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@sanity/client';
 
+// ============================================================================
+// KONFIGURASI
+// ============================================================================
+//
+// Endpoint ini mengambil detail campaign berdasarkan slug.
+//
+// Karena data campaign dapat berubah setelah pembayaran,
+// gunakan:
+//   - force-dynamic
+//   - useCdn: false
+//   - cache: no-store
+//
+// ============================================================================
+
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+// ============================================================================
+// SANITY CLIENT
+// ============================================================================
+//
+// JANGAN menaruh token langsung di source code.
+//
+// Jika data yang dibutuhkan hanya data publik, sebenarnya token tidak
+// diperlukan. Jika project Sanity Anda membutuhkan token untuk membaca,
+// gunakan SANITY_API_READ_TOKEN dari environment variable.
+//
+// ============================================================================
 
 const client = createClient({
-  projectId: 'lsnco71s',
-  dataset: 'production',
-  useCdn: false, // Wajib false agar data langsung ditarik real-time
-  apiVersion: '2024-01-01',
-  token: 'skpBKfAgOlsao6h2yQVemNTmfhXmjv5eRPrlp273GmHqOaaif4WnoH4PRfiOT6AZf7MVz7UxkVnUKo6DvxSL3XhohEvym6I9YgQhCnLhWAQMHiUlt2lEh1LbDSTLqNbKc9mG3AqXB9K4AcMbjTO6Iy4cRqcPa6LOr2h9QmHQqicCZGO1xvKh',
+  projectId:
+    process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ||
+    'lsnco71s',
+
+  dataset:
+    process.env.NEXT_PUBLIC_SANITY_DATASET ||
+    'production',
+
+  apiVersion: '2026-01-01',
+
+  useCdn: false,
+
+  ...(process.env.SANITY_API_READ_TOKEN
+    ? {
+        token:
+          process.env.SANITY_API_READ_TOKEN,
+      }
+    : {}),
 });
 
-export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+// ============================================================================
+// GET CAMPAIGN
+// ============================================================================
+
+export async function GET(
+  request: Request,
+  {
+    params,
+  }: {
+    params: Promise<{
+      slug: string;
+    }>;
+  }
+) {
   try {
+    // ========================================================================
+    // PARAMETER
+    // ========================================================================
+
     const { slug } = await params;
 
-    // 🚀 FIXED: Menarik semua kemungkinan nama field gambar di Sanity Studio kamu
-    const query = `*[(_type == "program" || _type == "campaign") && slug.current == $slug][0] {
-      title,
-      description,
-      "mainImageUrl": mainImage.asset->url,
-      "imageUrl": image.asset->url,
-      "thumbnailUrl": thumbnail.asset->url,
-      "bannerUrl": banner.asset->url
-    }`;
+    const cleanSlug =
+      typeof slug === 'string'
+        ? slug.trim()
+        : '';
 
-    const data = await client.fetch(query, { slug });
-
-    if (!data) {
-      return NextResponse.json({ success: false, message: 'Campaign tidak ditemukan' }, { status: 404 });
+    if (!cleanSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Slug campaign tidak valid.',
+        },
+        {
+          status: 400,
+          headers: {
+            'Cache-Control':
+              'no-store',
+          },
+        }
+      );
     }
 
-    // 🚀 MASTER LOGIC: Pilih gambar mana pun yang tersedia dari database Sanity kamu
-    const finalImageUrl = data.mainImageUrl || data.imageUrl || data.thumbnailUrl || data.bannerUrl || null;
+    // ========================================================================
+    // QUERY
+    // ========================================================================
+    //
+    // Schema program Anda menggunakan:
+    //
+    // image
+    // title
+    // description
+    // slug
+    //
+    // Namun tetap kita pertahankan kompatibilitas dengan schema lama yang
+    // mungkin memiliki:
+    //
+    // mainImage
+    // thumbnail
+    // banner
+    //
+    // ========================================================================
 
-    return NextResponse.json({ 
-      success: true, 
-      data: {
-        title: data.title,
-        description: data.description,
-        imageUrl: finalImageUrl // Mengembalikan string URL gambar murni yang valid
+    const query = `
+      *[
+        (_type == "program" || _type == "campaign")
+        && slug.current == $slug
+      ][0] {
+        _id,
+        _type,
+
+        title,
+
+        "slug": slug.current,
+
+        description,
+
+        "mainImageUrl":
+          mainImage.asset->url,
+
+        "imageUrl":
+          image.asset->url,
+
+        "thumbnailUrl":
+          thumbnail.asset->url,
+
+        "bannerUrl":
+          banner.asset->url,
+
+        collectedRaw,
+
+        targetAmount,
+
+        category,
+
+        donors,
+
+        reports
       }
-    });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    `;
+
+    // ========================================================================
+    // FETCH REAL-TIME
+    // ========================================================================
+
+    const data =
+      await client.fetch(
+        query,
+        {
+          slug: cleanSlug,
+        },
+        {
+          cache: 'no-store',
+          next: {
+            revalidate: 0,
+          },
+        }
+      );
+
+    // ========================================================================
+    // NOT FOUND
+    // ========================================================================
+
+    if (!data) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Campaign tidak ditemukan.',
+        },
+        {
+          status: 404,
+          headers: {
+            'Cache-Control':
+              'no-store',
+          },
+        }
+      );
+    }
+
+    // ========================================================================
+    // PILIH GAMBAR
+    // ========================================================================
+    //
+    // Prioritas:
+    //
+    // 1. image       ← schema program Anda sekarang
+    // 2. mainImage   ← schema lama
+    // 3. thumbnail
+    // 4. banner
+    //
+    // ========================================================================
+
+    const finalImageUrl =
+      data.imageUrl ||
+      data.mainImageUrl ||
+      data.thumbnailUrl ||
+      data.bannerUrl ||
+      null;
+
+    // ========================================================================
+    // NORMALISASI DATA
+    // ========================================================================
+
+    const collectedRaw =
+      Number(
+        data.collectedRaw || 0
+      );
+
+    const targetAmount =
+      Number(
+        data.targetAmount ||
+          50_000_000
+      );
+
+    // ========================================================================
+    // RESPONSE
+    // ========================================================================
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        data: {
+          _id:
+            data._id || null,
+
+          type:
+            data._type || 'program',
+
+          title:
+            data.title || '',
+
+          slug:
+            data.slug ||
+            cleanSlug,
+
+          description:
+            data.description ||
+            null,
+
+          imageUrl:
+            finalImageUrl,
+
+          category:
+            data.category ||
+            'Kemanusiaan',
+
+          collectedRaw:
+            Number.isFinite(
+              collectedRaw
+            )
+              ? Math.max(
+                  collectedRaw,
+                  0
+                )
+              : 0,
+
+          targetAmount:
+            Number.isFinite(
+              targetAmount
+            )
+              ? Math.max(
+                  targetAmount,
+                  1
+                )
+              : 50_000_000,
+
+          donors:
+            Array.isArray(
+              data.donors
+            )
+              ? data.donors
+              : [],
+
+          reports:
+            Array.isArray(
+              data.reports
+            )
+              ? data.reports
+              : [],
+        },
+      },
+      {
+        status: 200,
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          // ================================================================
+          // JANGAN CACHE
+          // ================================================================
+
+          'Cache-Control':
+            'no-store, no-cache, must-revalidate, proxy-revalidate',
+
+          Pragma:
+            'no-cache',
+
+          Expires:
+            '0',
+        },
+      }
+    );
+
+  } catch (error: unknown) {
+    // ========================================================================
+    // ERROR
+    // ========================================================================
+
+    console.error(
+      '🔥 [API CAMPAIGN] Error:',
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Terjadi kesalahan saat mengambil data campaign.';
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: message,
+      },
+      {
+        status: 500,
+
+        headers: {
+          'Cache-Control':
+            'no-store',
+        },
+      }
+    );
   }
 }

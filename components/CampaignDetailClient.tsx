@@ -24,7 +24,6 @@ function cleanPhone(value: string): string {
 function isValidPhone(value: string): boolean {
   const phone = cleanPhone(value);
 
-  // Nomor WA donor boleh kosong.
   return (
     !phone ||
     (phone.length >= 9 && phone.length <= 15)
@@ -53,19 +52,82 @@ function safeMoney(value: unknown): number {
 }
 
 // ============================================================================
+// FIX DANA TERKUMPUL
+// ============================================================================
+// collectedRaw adalah sumber utama.
+//
+// Beberapa kemungkinan nama field lama juga kita dukung sebagai fallback.
+// Ini membuat frontend tidak langsung menjadi Rp 0 apabila API masih
+// mengirim nama field lama.
+// ============================================================================
+
+function getCollectedAmount(program: any): number {
+  if (!program) {
+    return 0;
+  }
+
+  // PRIORITAS 1 — field resmi schema Sanity
+  const collectedRaw = safeMoney(
+    program.collectedRaw
+  );
+
+  if (collectedRaw > 0) {
+    return collectedRaw;
+  }
+
+  // PRIORITAS 2 — kemungkinan field lama
+  const collectedAmount = safeMoney(
+    program.collectedAmount
+  );
+
+  if (collectedAmount > 0) {
+    return collectedAmount;
+  }
+
+  // PRIORITAS 3 — kemungkinan field lama lainnya
+  const collected = safeMoney(
+    program.collected
+  );
+
+  if (collected > 0) {
+    return collected;
+  }
+
+  // PRIORITAS 4 — fallback dari daftar donatur
+  // Hanya digunakan jika collectedRaw memang belum tersedia.
+  if (
+    Array.isArray(program.donors) &&
+    program.donors.length > 0
+  ) {
+    const donorTotal =
+      program.donors.reduce(
+        (
+          total: number,
+          donor: any
+        ) => {
+          return (
+            total +
+            safeMoney(
+              donor?.amount
+            )
+          );
+        },
+        0
+      );
+
+    if (donorTotal > 0) {
+      return donorTotal;
+    }
+  }
+
+  return 0;
+}
+
+// ============================================================================
 // PORTABLE TEXT
 // ============================================================================
 
 const portableTextComponents = {
-  // ==========================================================================
-  // BLOCK / PARAGRAF
-  // ==========================================================================
-  //
-  // PortableText tidak otomatis memberi jarak yang cukup jika style prose
-  // tertimpa oleh CSS lain. Karena itu margin paragraf dibuat eksplisit.
-  //
-  // ==========================================================================
-
   block: {
     normal: ({ children }: any) => (
       <p className="mb-5 last:mb-0 leading-7 md:leading-8">
@@ -98,10 +160,6 @@ const portableTextComponents = {
     ),
   },
 
-  // ==========================================================================
-  // IMAGE
-  // ==========================================================================
-
   types: {
     image: ({ value }: any) => {
       const imageUrl =
@@ -127,9 +185,7 @@ const portableTextComponents = {
 
       return (
         <figure className="my-7 space-y-2 w-full">
-
           <div className="overflow-hidden bg-gray-50 border border-gray-100 shadow-sm aspect-[16/9]">
-
             <img
               src={imageUrl}
               alt={alt}
@@ -140,7 +196,6 @@ const portableTextComponents = {
                   FALLBACK_IMAGE;
               }}
             />
-
           </div>
 
           {caption && (
@@ -148,15 +203,10 @@ const portableTextComponents = {
               {caption}
             </figcaption>
           )}
-
         </figure>
       );
     },
   },
-
-  // ==========================================================================
-  // LIST
-  // ==========================================================================
 
   list: {
     bullet: ({ children }: any) => (
@@ -185,10 +235,6 @@ const portableTextComponents = {
       </li>
     ),
   },
-
-  // ==========================================================================
-  // MARKS
-  // ==========================================================================
 
   marks: {
     strong: ({ children }: any) => (
@@ -272,12 +318,6 @@ function EmbeddedZakatCalculator({
     setInput2,
   ] = useState('');
 
-  // ==========================================================================
-  // CATATAN:
-  // Harga emas sebaiknya nanti dibuat dinamis jika Anda menginginkan nisab
-  // yang selalu mengikuti harga emas terbaru.
-  // ==========================================================================
-
   const HARGA_EMAS = 1_400_000;
 
   const NISHAB_TAHUNAN =
@@ -337,10 +377,6 @@ function EmbeddedZakatCalculator({
   let totalZakat = 0;
   let isWajib = false;
 
-  // ==========================================================================
-  // PENGHASILAN
-  // ==========================================================================
-
   if (
     activeTab ===
     'penghasilan'
@@ -361,10 +397,6 @@ function EmbeddedZakatCalculator({
         : 0;
   }
 
-  // ==========================================================================
-  // MAAL
-  // ==========================================================================
-
   else if (
     activeTab === 'maal'
   ) {
@@ -383,10 +415,6 @@ function EmbeddedZakatCalculator({
           )
         : 0;
   }
-
-  // ==========================================================================
-  // EMAS
-  // ==========================================================================
 
   else {
     const berat =
@@ -407,8 +435,6 @@ function EmbeddedZakatCalculator({
 
   return (
     <div className="border border-gray-200 bg-white overflow-hidden mt-6">
-
-      {/* TABS */}
 
       <div className="flex border-b border-gray-200 text-[10px] font-black bg-gray-50/50">
 
@@ -460,8 +486,6 @@ function EmbeddedZakatCalculator({
         </button>
 
       </div>
-
-      {/* CONTENT */}
 
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
 
@@ -540,8 +564,6 @@ function EmbeddedZakatCalculator({
           )}
 
         </div>
-
-        {/* RESULT */}
 
         <div className="bg-gray-50 border border-gray-100 p-4 text-center space-y-2">
 
@@ -636,8 +658,6 @@ function DonationFormFields({
   return (
     <div className="space-y-4 text-left">
 
-      {/* NAMA */}
-
       <div>
         <label className="text-[11px] font-bold text-gray-500 block mb-1.5">
           Nama Donatur
@@ -656,8 +676,6 @@ function DonationFormFields({
           }
         />
       </div>
-
-      {/* WHATSAPP */}
 
       <div>
         <label className="text-[11px] font-bold text-gray-500 block mb-1.5">
@@ -678,8 +696,6 @@ function DonationFormFields({
           }
         />
       </div>
-
-      {/* PAYMENT */}
 
       <div>
         <label className="text-[11px] font-bold text-gray-500 block mb-1.5">
@@ -731,8 +747,6 @@ function DonationFormFields({
         </select>
       </div>
 
-      {/* AMOUNT */}
-
       <div>
         <label className="text-[11px] font-bold text-gray-500 block mb-1.5">
           Nominal Dana (Rp)
@@ -757,8 +771,6 @@ function DonationFormFields({
 
         </div>
       </div>
-
-      {/* BUTTON */}
 
       <button
         type="button"
@@ -852,10 +864,6 @@ export default function CampaignDetailClient({
     'laporan'
   >('cerita');
 
-  // ==========================================================================
-  // FUNDRAISER MODAL
-  // ==========================================================================
-
   const [
     isFundraiserModalOpen,
     setIsFundraiserModalOpen,
@@ -880,24 +888,47 @@ export default function CampaignDetailClient({
   // ==========================================================================
   // FETCH PROGRAM
   // ==========================================================================
+  //
+  // FIX:
+  // 1. cache: no-store
+  // 2. cache bust dengan timestamp
+  // 3. fungsi dipisahkan agar bisa dipanggil ulang
+  // 4. otomatis refresh setiap 10 detik
+  // 5. refresh saat browser kembali aktif
+  //
+  // ==========================================================================
 
   useEffect(() => {
     const controller =
       new AbortController();
 
-    async function loadProgram() {
-      setLoading(true);
+    async function loadProgram(
+      silent = false
+    ) {
+      if (!silent) {
+        setLoading(true);
+      }
 
       try {
+        const separator =
+          '/api/programs'.includes(
+            '?'
+          )
+            ? '&'
+            : '?';
+
         const response =
           await fetch(
-            '/api/programs',
+            `/api/programs${separator}_t=${Date.now()}`,
             {
               method: 'GET',
 
               headers: {
                 Accept:
                   'application/json',
+
+                'Cache-Control':
+                  'no-cache',
               },
 
               cache:
@@ -931,6 +962,39 @@ export default function CampaignDetailClient({
               slug
           ) || null;
 
+        // ================================================================
+        // FIX DANA TERKUMPUL
+        // ================================================================
+        //
+        // Jangan mengubah nilai collectedRaw di frontend.
+        // Kita hanya memastikan data program dari API disimpan utuh.
+        //
+        // ================================================================
+
+        if (
+          found
+        ) {
+          console.log(
+            `[${SITE_NAME}] Data program:`,
+            {
+              slug:
+                found.slug,
+              collectedRaw:
+                found.collectedRaw,
+              collectedAmount:
+                found.collectedAmount,
+              collected:
+                found.collected,
+              donors:
+                Array.isArray(
+                  found.donors
+                )
+                  ? found.donors.length
+                  : 0,
+            }
+          );
+        }
+
         setProgram(
           json?.success
             ? found
@@ -951,11 +1015,16 @@ export default function CampaignDetailClient({
           error
         );
 
-        setProgram(null);
+        // Jangan menghapus data lama ketika
+        // refresh background gagal.
+        if (!silent) {
+          setProgram(null);
+        }
       } finally {
         if (
           !controller.signal
-            .aborted
+            .aborted &&
+          !silent
         ) {
           setLoading(
             false
@@ -964,31 +1033,60 @@ export default function CampaignDetailClient({
       }
     }
 
-    loadProgram();
+    // Load pertama
+    loadProgram(false);
+
+    // ========================================================================
+    // AUTO REFRESH
+    // ========================================================================
+    //
+    // Webhook Pakasir dapat memperbarui Sanity beberapa detik setelah
+    // pembayaran. Karena itu halaman mengecek ulang setiap 10 detik.
+    //
+    // ========================================================================
+
+    const interval =
+      window.setInterval(
+        () => {
+          loadProgram(true);
+        },
+        10_000
+      );
+
+    // ========================================================================
+    // REFRESH SAAT TAB KEMBALI AKTIF
+    // ========================================================================
+
+    function handleVisibilityChange() {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        loadProgram(true);
+      }
+    }
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
+    );
 
     return () => {
       controller.abort();
+
+      window.clearInterval(
+        interval
+      );
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
     };
   }, [slug]);
 
   // ==========================================================================
   // FUNDRAISER VIEW TRACKING
-  // ==========================================================================
-  //
-  // Campaign view ditangani ViewCounter.
-  //
-  // Jika URL:
-  //
-  // /campaign/program-a?ref=ABC123
-  //
-  // maka kita juga menambah view:
-  //
-  // type = fundraiser
-  // key  = ABC123
-  //
-  // Halaman /fundraiser/stats nanti cukup membaca angka ini dengan
-  // increment={false}.
-  //
   // ==========================================================================
 
   useEffect(() => {
@@ -1108,10 +1206,6 @@ export default function CampaignDetailClient({
     const numericAmount =
       Number(cleanAmount);
 
-    // ------------------------------------------------------------------------
-    // AMOUNT VALIDATION
-    // ------------------------------------------------------------------------
-
     if (
       !cleanAmount ||
       !Number.isFinite(
@@ -1126,10 +1220,6 @@ export default function CampaignDetailClient({
       return;
     }
 
-    // ------------------------------------------------------------------------
-    // PHONE
-    // ------------------------------------------------------------------------
-
     if (
       !isValidPhone(
         donorPhone
@@ -1141,10 +1231,6 @@ export default function CampaignDetailClient({
 
       return;
     }
-
-    // ------------------------------------------------------------------------
-    // PROGRAM
-    // ------------------------------------------------------------------------
 
     if (
       !program?.slug
@@ -1369,18 +1455,14 @@ export default function CampaignDetailClient({
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-
         <div className="text-center">
-
           <div className="w-7 h-7 border-2 border-gray-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-3" />
 
           <p className="text-gray-500 font-medium text-sm">
             Memuat detail
             program...
           </p>
-
         </div>
-
       </div>
     );
   }
@@ -1392,9 +1474,7 @@ export default function CampaignDetailClient({
   if (!program) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center px-4">
-
         <div className="text-center">
-
           <p className="text-gray-800 text-sm font-bold mb-1">
             Program tidak
             ditemukan
@@ -1405,9 +1485,7 @@ export default function CampaignDetailClient({
             dihapus atau belum
             tersedia.
           </p>
-
         </div>
-
       </div>
     );
   }
@@ -1425,9 +1503,23 @@ export default function CampaignDetailClient({
       1
     );
 
+  // ==========================================================================
+  // FIX DANA TERKUMPUL
+  // ==========================================================================
+  //
+  // Jangan langsung:
+  //
+  // const collectedRaw = safeMoney(program.collectedRaw)
+  //
+  // karena jika API tidak mengirim field tersebut, hasilnya langsung 0.
+  //
+  // Gunakan helper getCollectedAmount().
+  //
+  // ==========================================================================
+
   const collectedRaw =
-    safeMoney(
-      program.collectedRaw
+    getCollectedAmount(
+      program
     );
 
   const percentage =
@@ -1493,10 +1585,6 @@ export default function CampaignDetailClient({
 
         <section className="lg:col-span-2 space-y-5 flex flex-col">
 
-          {/* =================================================================
-              HEADER
-              ================================================================= */}
-
           <header className="text-left">
 
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.18em] mb-2">
@@ -1512,13 +1600,7 @@ export default function CampaignDetailClient({
               {program.title}
             </h1>
 
-            {/* ===============================================================
-                VIEWS + REFERRAL
-                =============================================================== */}
-
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-400">
-
-              {/* CAMPAIGN VIEW */}
 
               <ViewCounter
                 type="campaign"
@@ -1530,8 +1612,6 @@ export default function CampaignDetailClient({
               <span>
                 kali dilihat
               </span>
-
-              {/* REFERRAL INDICATOR */}
 
               {cleanReferral && (
                 <>
@@ -1549,9 +1629,7 @@ export default function CampaignDetailClient({
 
           </header>
 
-          {/* =================================================================
-              IMAGE
-              ================================================================= */}
+          {/* IMAGE */}
 
           <figure className="overflow-hidden bg-gray-100 aspect-[16/9] w-full shadow-sm border border-gray-200/60">
 
@@ -1575,9 +1653,7 @@ export default function CampaignDetailClient({
 
           </figure>
 
-          {/* =================================================================
-              TABS
-              ================================================================= */}
+          {/* TABS */}
 
           <div className="flex border-b border-gray-200 text-xs font-bold text-gray-400 gap-5 md:gap-6 pt-2 overflow-x-auto">
 
@@ -1639,21 +1715,15 @@ export default function CampaignDetailClient({
 
           </div>
 
-          {/* =================================================================
-              TAB CONTENT
-              ================================================================= */}
+          {/* TAB CONTENT */}
 
           <div className="bg-transparent py-2 w-full text-left">
 
-            {/* ===============================================================
-                CERITA
-                =============================================================== */}
+            {/* CERITA */}
 
             {activeTab ===
               'cerita' && (
               <div className="space-y-6">
-
-                {/* ZAKAT CALCULATOR */}
 
                 {isZakatProgram && (
                   <div className="bg-emerald-50/40 p-1 border border-dashed border-emerald-600/30">
@@ -1676,8 +1746,6 @@ export default function CampaignDetailClient({
                   </div>
                 )}
 
-                {/* DESCRIPTION */}
-
                 <div className="dynamic-portable-text max-w-none text-[15px] md:text-base font-normal tracking-[0.01em] text-gray-700">
 
                   {program.description ? (
@@ -1688,8 +1756,11 @@ export default function CampaignDetailClient({
 
                         {program.description
                           .split(/\n\s*\n/)
-                          .map((paragraph: string) =>
-                            paragraph.trim()
+                          .map(
+                            (
+                              paragraph: string
+                            ) =>
+                              paragraph.trim()
                           )
                           .filter(Boolean)
                           .map(
@@ -1733,9 +1804,7 @@ export default function CampaignDetailClient({
               </div>
             )}
 
-            {/* ===============================================================
-                DONATORS
-                =============================================================== */}
+            {/* DONATORS */}
 
             {activeTab ===
               'donatur' && (
@@ -1752,7 +1821,7 @@ export default function CampaignDetailClient({
                         index:
                           number
                       ) => {
-                        const amount =
+                        const donorAmount =
                           safeMoney(
                             donor.amount
                           );
@@ -1803,7 +1872,7 @@ export default function CampaignDetailClient({
 
                               <p className="text-xs font-black text-emerald-600">
                                 +Rp{' '}
-                                {amount.toLocaleString(
+                                {donorAmount.toLocaleString(
                                   'id-ID'
                                 )}
                               </p>
@@ -1824,9 +1893,7 @@ export default function CampaignDetailClient({
               </div>
             )}
 
-            {/* ===============================================================
-                REPORT
-                =============================================================== */}
+            {/* REPORT */}
 
             {activeTab ===
               'laporan' && (
@@ -1928,6 +1995,10 @@ export default function CampaignDetailClient({
             Dana Terkumpul
           </p>
 
+          {/* ================================================================
+              DANA TERKUMPUL
+              ================================================================ */}
+
           <p className="text-3xl font-black text-emerald-600 mt-1 text-left">
             Rp{' '}
             {collectedRaw.toLocaleString(
@@ -2008,7 +2079,7 @@ export default function CampaignDetailClient({
 
           </div>
 
-          {/* FUNDRAISER BUTTON */}
+          {/* FUNDRAISER */}
 
           <button
             type="button"
@@ -2031,7 +2102,7 @@ export default function CampaignDetailClient({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="2.5"
-                d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
+                d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c0-1.543-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
               />
             </svg>
 
@@ -2050,8 +2121,6 @@ export default function CampaignDetailClient({
           ===================================================================== */}
 
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 z-40 flex flex-col space-y-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-
-        {/* TOTAL */}
 
         <div className="flex justify-between items-end text-left w-full px-0.5">
 
@@ -2087,8 +2156,6 @@ export default function CampaignDetailClient({
 
         </div>
 
-        {/* PROGRESS */}
-
         <div className="w-full bg-gray-100 h-1 overflow-hidden">
 
           <div
@@ -2101,16 +2168,12 @@ export default function CampaignDetailClient({
 
         </div>
 
-        {/* REFERRAL */}
-
         {cleanReferral && (
           <div className="bg-purple-50 border border-dashed border-purple-200 py-1 text-center text-[9px] font-bold text-purple-700 uppercase tracking-wider">
             Melalui Link
             Fundraiser Aktif
           </div>
         )}
-
-        {/* DONATE */}
 
         <button
           type="button"
@@ -2123,8 +2186,6 @@ export default function CampaignDetailClient({
         >
           Donasi Sekarang 🚀
         </button>
-
-        {/* FUNDRAISER */}
 
         <button
           type="button"
@@ -2148,7 +2209,7 @@ export default function CampaignDetailClient({
               strokeLinejoin="round"
               strokeWidth="2.5"
               d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
-              />
+            />
           </svg>
 
           <span>
@@ -2260,8 +2321,6 @@ export default function CampaignDetailClient({
 
           <div className="bg-white w-full max-w-sm p-5 shadow-xl border border-gray-200 space-y-4 relative z-10 text-left">
 
-            {/* CLOSE */}
-
             <button
               type="button"
               aria-label="Tutup"
@@ -2274,8 +2333,6 @@ export default function CampaignDetailClient({
             >
               ✕
             </button>
-
-            {/* HEADER */}
 
             <div className="space-y-1">
 
@@ -2293,16 +2350,12 @@ export default function CampaignDetailClient({
 
             </div>
 
-            {/* FORM */}
-
             <form
               onSubmit={
                 handleRegisterFundraiser
               }
               className="space-y-3.5 pt-1"
             >
-
-              {/* NAME */}
 
               <div className="space-y-1">
 
@@ -2336,8 +2389,6 @@ export default function CampaignDetailClient({
 
               </div>
 
-              {/* PHONE */}
-
               <div className="space-y-1">
 
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
@@ -2370,8 +2421,6 @@ export default function CampaignDetailClient({
                 />
 
               </div>
-
-              {/* SUBMIT */}
 
               <button
                 type="submit"
