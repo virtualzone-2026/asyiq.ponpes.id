@@ -18,11 +18,21 @@ const SANITY_DATASET =
 const SANITY_TOKEN =
   process.env.SANITY_API_WRITE_TOKEN || '';
 
+const PAKASIR_API_KEY =
+  process.env.PAKASIR_API_KEY || '';
+
 const PAKASIR_WEBHOOK_SECRET =
   process.env.PAKASIR_WEBHOOK_SECRET || '';
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'https://www.asyiq.ponpes.id';
+
+const PAKASIR_PROJECT =
+  'pondok-pesantren-aasyiqul-quran';
+
 // ============================================================================
-// SANITY CLIENT
+// SANITY
 // ============================================================================
 
 const client = createClient({
@@ -50,12 +60,15 @@ interface DonationTransaction {
   amount?: number;
 
   status?: string;
+  gatewayStatus?: string;
 
   slug?: string;
 
   paymentMethod?: string;
 
   fundraiserPhone?: string;
+
+  isSandbox?: boolean;
 }
 
 interface ProgramDocument {
@@ -67,6 +80,22 @@ interface FundraiserDocument {
   _id: string;
   name?: string;
   phone?: string;
+}
+
+interface PakasirStatusResponse {
+  txn_id?: string;
+  project?: string;
+  order_id?: string;
+  amount?: number;
+  fee?: number;
+  total_payment?: number;
+  payment_method?: string;
+  status?: string;
+  completed_at?: string;
+  is_sandbox?: boolean;
+
+  message?: string;
+  error?: string;
 }
 
 // ============================================================================
@@ -159,21 +188,22 @@ async function appendToGoogleSheets(data: {
       return;
     }
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: email,
-        private_key: privateKey,
-      },
+    const auth =
+      new google.auth.GoogleAuth({
+        credentials: {
+          client_email: email,
+          private_key: privateKey,
+        },
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets',
+        ],
+      });
 
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-      ],
-    });
-
-    const sheets = google.sheets({
-      version: 'v4',
-      auth,
-    });
+    const sheets =
+      google.sheets({
+        version: 'v4',
+        auth,
+      });
 
     const cleanPhone =
       normalizePhone(data.phone);
@@ -185,9 +215,7 @@ async function appendToGoogleSheets(data: {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-
       range: 'Sheet1!A:G',
-
       valueInputOption: 'USER_ENTERED',
 
       requestBody: {
@@ -209,7 +237,6 @@ async function appendToGoogleSheets(data: {
       `📊 GOOGLE SHEET SUKSES: ${data.orderId}`
     );
   } catch (error) {
-    // Jangan menggagalkan transaksi utama
     console.error(
       '🔥 GOOGLE SHEETS ERROR:',
       error
@@ -286,13 +313,10 @@ _Amanah dalam menyalurkan kebaikan_`;
       );
 
     if (!response.ok) {
-      const responseText =
-        await response.text();
-
       console.error(
         '🔥 FONNTE RESPONSE ERROR:',
         response.status,
-        responseText
+        await response.text()
       );
 
       return;
@@ -310,568 +334,330 @@ _Amanah dalam menyalurkan kebaikan_`;
 }
 
 // ============================================================================
-// WEBHOOK PAKASIR V2
+// CARI TRANSAKSI
 // ============================================================================
 
-export async function POST(
-  request: Request
+async function findTransaction(
+  txnId: string,
+  orderId: string
 ) {
-  try {
-    // ========================================================================
-    // 1. CEK ENV
-    // ========================================================================
-
-    if (!SANITY_TOKEN) {
-      console.error(
-        '❌ SANITY_API_WRITE_TOKEN belum dikonfigurasi.'
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Konfigurasi Sanity belum lengkap.',
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    if (!PAKASIR_WEBHOOK_SECRET) {
-      console.error(
-        '❌ PAKASIR_WEBHOOK_SECRET belum dikonfigurasi.'
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Konfigurasi webhook belum lengkap.',
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 2. VERIFIKASI X-SECRET
-    // ========================================================================
-
-    const incomingSecret =
-      request.headers.get('x-secret') || '';
-
-    if (
-      !incomingSecret ||
-      incomingSecret !==
-        PAKASIR_WEBHOOK_SECRET
-    ) {
-      console.error(
-        '❌ WEBHOOK DITOLAK: X-Secret tidak cocok.'
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Unauthorized webhook.',
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 3. BACA PAYLOAD
-    // ========================================================================
-
-    const payload =
-      await request.json();
-
-    const txnId =
-      String(
-        payload?.txn_id || ''
-      ).trim();
-
-    const orderId =
-      String(
-        payload?.order_id || ''
-      ).trim();
-
-    const amount =
-      safeNumber(
-        payload?.amount
-      );
-
-    const status =
-      String(
-        payload?.status || ''
+  return client.fetch<DonationTransaction | null>(
+    `
+    *[
+      _type == "donationTransaction"
+      &&
+      (
+        txnId == $txnId
+        ||
+        orderId == $orderId
       )
-        .toLowerCase()
-        .trim();
+    ][0]{
+      _id,
+      _rev,
+      txnId,
+      orderId,
+      donorName,
+      donorPhone,
+      amount,
+      status,
+      gatewayStatus,
+      slug,
+      paymentMethod,
+      fundraiserPhone,
+      isSandbox
+    }
+    `,
+    {
+      txnId,
+      orderId,
+    }
+  );
+}
 
-    const completedAt =
-      String(
-        payload?.completed_at || ''
-      ).trim();
+// ============================================================================
+// CARI PROGRAM
+// ============================================================================
 
-    const isSandbox =
-      Boolean(
-        payload?.is_sandbox
-      );
+async function findProgram(
+  slug: string
+) {
+  return client.fetch<ProgramDocument | null>(
+    `
+    *[
+      _type == "program"
+      &&
+      slug.current == $slug
+    ][0]{
+      _id,
+      title
+    }
+    `,
+    {
+      slug,
+    }
+  );
+}
 
+// ============================================================================
+// CARI FUNDRAISER
+// ============================================================================
+
+async function findFundraiser(
+  phone: string
+) {
+  if (!phone) {
+    return null;
+  }
+
+  const international =
+    normalizePhone(phone);
+
+  const local =
+    localPhone(phone);
+
+  return client.fetch<FundraiserDocument | null>(
+    `
+    *[
+      _type == "fundraiser"
+      &&
+      (
+        phone == $raw
+        ||
+        phone == $international
+        ||
+        phone == $local
+      )
+    ][0]{
+      _id,
+      name,
+      phone
+    }
+    `,
+    {
+      raw: phone,
+      international,
+      local,
+    }
+  );
+}
+
+// ============================================================================
+// PROSES TRANSAKSI BERHASIL
+// ============================================================================
+
+async function processSuccessfulPayment(data: {
+  txnId: string;
+  orderId: string;
+  amount: number;
+  completedAt?: string;
+  isSandbox?: boolean;
+}) {
+  const {
+    txnId,
+    orderId,
+    amount,
+    completedAt,
+    isSandbox = false,
+  } = data;
+
+  // --------------------------------------------------------------------------
+  // AMBIL TRANSAKSI TERBARU
+  // --------------------------------------------------------------------------
+
+  let transaction =
+    await findTransaction(
+      txnId,
+      orderId
+    );
+
+  if (!transaction) {
+    throw new Error(
+      `Transaksi tidak ditemukan: ${orderId}`
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDASI
+  // --------------------------------------------------------------------------
+
+  if (
+    transaction.txnId &&
+    transaction.txnId !== txnId
+  ) {
+    throw new Error(
+      `Txn ID tidak cocok. Sanity=${transaction.txnId}, Pakasir=${txnId}`
+    );
+  }
+
+  if (
+    transaction.orderId !== orderId
+  ) {
+    throw new Error(
+      `Order ID tidak cocok. Sanity=${transaction.orderId}, Pakasir=${orderId}`
+    );
+  }
+
+  const localAmount =
+    safeNumber(transaction.amount);
+
+  if (
+    localAmount !== amount
+  ) {
+    throw new Error(
+      `Nominal tidak cocok. Sanity=${localAmount}, Pakasir=${amount}`
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // IDEMPOTENCY
+  // --------------------------------------------------------------------------
+
+  if (
+    transaction.status === 'success' ||
+    transaction.gatewayStatus === 'completed'
+  ) {
     console.log(
-      '📥 PAKASIR V2 WEBHOOK:',
+      `ℹ️ TRANSAKSI SUDAH SUCCESS: ${orderId}`
+    );
+
+    return {
+      alreadyProcessed: true,
+      transaction,
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // DATA TRANSAKSI
+  // --------------------------------------------------------------------------
+
+  const donorName =
+    String(
+      transaction.donorName ||
+      'Hamba Allah'
+    ).trim();
+
+  const donorPhone =
+    String(
+      transaction.donorPhone ||
+      ''
+    ).trim();
+
+  const programSlug =
+    String(
+      transaction.slug ||
+      ''
+    )
+      .toLowerCase()
+      .trim();
+
+  const paymentMethod =
+    String(
+      transaction.paymentMethod ||
+      'QRIS'
+    )
+      .toUpperCase()
+      .trim();
+
+  if (!programSlug) {
+    throw new Error(
+      'Slug program tidak ditemukan.'
+    );
+  }
+
+  const program =
+    await findProgram(
+      programSlug
+    );
+
+  if (!program) {
+    throw new Error(
+      `Program tidak ditemukan: ${programSlug}`
+    );
+  }
+
+  const fundraiserPhone =
+    String(
+      transaction.fundraiserPhone ||
+      ''
+    ).trim();
+
+  const fundraiser =
+    await findFundraiser(
+      fundraiserPhone
+    );
+
+  // --------------------------------------------------------------------------
+  // WAKTU
+  // --------------------------------------------------------------------------
+
+  const finalDate =
+    completedAt
+      ? new Date(completedAt)
+      : new Date();
+
+  const currentDate =
+    finalDate.toLocaleDateString(
+      'id-ID',
       {
-        txnId,
-        orderId,
-        amount,
-        status,
-        isSandbox,
+        timeZone: 'Asia/Jakarta',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       }
     );
 
-    // ========================================================================
-    // 4. VALIDASI PAYLOAD
-    // ========================================================================
+  const currentTime =
+    finalDate.toLocaleTimeString(
+      'id-ID',
+      {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }
+    );
 
-    if (!txnId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'txn_id tidak ditemukan.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+  const completedIso =
+    completedAt ||
+    new Date().toISOString();
 
-    if (!orderId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'order_id tidak ditemukan.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+  // --------------------------------------------------------------------------
+  // DONOR KEY
+  // --------------------------------------------------------------------------
 
-    if (amount <= 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Nominal transaksi tidak valid.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 5. HANYA COMPLETED
-    // ========================================================================
-
-    if (
-      status !== 'completed'
-    ) {
-      console.warn(
-        `⚠️ Status webhook diabaikan: ${status}`
-      );
-
-      return NextResponse.json({
-        success: true,
-        message:
-          `Status ${status || '-'} diabaikan.`,
-      });
-    }
-
-    // ========================================================================
-    // 6. CARI TRANSAKSI SANITY
-    // ========================================================================
-
-    const transaction =
-      await client.fetch<
-        DonationTransaction | null
-      >(
-        `
-        *[
-          _type == "donationTransaction"
-          &&
-          (
-            txnId == $txnId
-            ||
-            orderId == $orderId
-          )
-        ][0]{
-          _id,
-          _rev,
-          txnId,
-          orderId,
-          donorName,
-          donorPhone,
-          amount,
-          status,
-          slug,
-          paymentMethod,
-          fundraiserPhone
-        }
-        `,
-        {
-          txnId,
-          orderId,
-        }
-      );
-
-    if (!transaction) {
-      console.error(
-        `❌ TRANSAKSI TIDAK DITEMUKAN: ${orderId}`
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Transaksi tidak ditemukan.',
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 7. VALIDASI txn_id
-    // ========================================================================
-
-    if (
-      transaction.txnId &&
-      transaction.txnId !== txnId
-    ) {
-      console.error(
-        '❌ TXN ID TIDAK COCOK:',
-        {
-          webhook: txnId,
-          sanity: transaction.txnId,
-        }
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Txn ID tidak cocok.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 8. VALIDASI ORDER ID
-    // ========================================================================
-
-    if (
-      transaction.orderId !==
-      orderId
-    ) {
-      console.error(
-        '❌ ORDER ID TIDAK COCOK:',
-        {
-          webhook: orderId,
-          sanity:
-            transaction.orderId,
-        }
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Order ID tidak cocok.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 9. VALIDASI NOMINAL
-    // ========================================================================
-
-    const localAmount =
-      safeNumber(
-        transaction.amount
-      );
-
-    if (
-      localAmount !==
-      amount
-    ) {
-      console.error(
-        '❌ NOMINAL TIDAK COCOK:',
-        {
-          webhookAmount:
-            amount,
-
-          localAmount,
-        }
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Nominal transaksi tidak cocok.',
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 10. IDEMPOTENCY
-    // ========================================================================
-
-    if (
-      transaction.status ===
-      'success' ||
-      transaction.status ===
-      'completed'
-    ) {
-      console.log(
-        `ℹ️ TRANSAKSI SUDAH DIPROSES: ${orderId}`
-      );
-
-      return NextResponse.json({
-        success: true,
-        message:
-          'Transaksi sudah diproses sebelumnya.',
-      });
-    }
-
-    // ========================================================================
-    // 11. DATA DONATUR
-    // ========================================================================
-
-    const donorName =
-      String(
-        transaction.donorName ||
-          'Hamba Allah'
-      ).trim();
-
-    const donorPhone =
-      String(
-        transaction.donorPhone ||
-          ''
-      ).trim();
-
-    const programSlug =
-      String(
-        transaction.slug ||
-          ''
+  const donorKey =
+    `donor-${orderId}`
+      .replace(
+        /[^a-zA-Z0-9_-]/g,
+        '-'
       )
-        .toLowerCase()
-        .trim();
+      .slice(0, 100);
 
-    const paymentMethod =
-      String(
-        transaction.paymentMethod ||
-          'QRIS'
-      )
-        .toUpperCase()
-        .trim();
+  // --------------------------------------------------------------------------
+  // FUNGSI COMMIT
+  // --------------------------------------------------------------------------
 
-    if (!programSlug) {
-      throw new Error(
-        'Slug program tidak ditemukan pada transaksi.'
-      );
-    }
-
-    // ========================================================================
-    // 12. CARI PROGRAM
-    // ========================================================================
-
-    const program =
-      await client.fetch<
-        ProgramDocument | null
-      >(
-        `
-        *[
-          _type == "program"
-          &&
-          slug.current == $slug
-        ][0]{
-          _id,
-          title
-        }
-        `,
-        {
-          slug:
-            programSlug,
-        }
-      );
-
-    if (!program) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            `Program ${programSlug} tidak ditemukan.`,
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    // ========================================================================
-    // 13. WAKTU
-    // ========================================================================
-
-    const now =
-      completedAt
-        ? new Date(completedAt)
-        : new Date();
-
-    const currentDate =
-      now.toLocaleDateString(
-        'id-ID',
-        {
-          timeZone:
-            'Asia/Jakarta',
-
-          day:
-            'numeric',
-
-          month:
-            'long',
-
-          year:
-            'numeric',
-        }
-      );
-
-    const currentTime =
-      now.toLocaleTimeString(
-        'id-ID',
-        {
-          timeZone:
-            'Asia/Jakarta',
-
-          hour:
-            '2-digit',
-
-          minute:
-            '2-digit',
-
-          hour12:
-            false,
-        }
-      );
-
-    // ========================================================================
-    // 14. FUNDRAISER
-    // ========================================================================
-
-    let fundraiser:
-      FundraiserDocument | null =
-      null;
-
-    const fundraiserPhone =
-      String(
-        transaction.fundraiserPhone ||
-          ''
-      ).trim();
-
-    if (fundraiserPhone) {
-      const internationalPhone =
-        normalizePhone(
-          fundraiserPhone
-        );
-
-      const localNumber =
-        localPhone(
-          fundraiserPhone
-        );
-
-      fundraiser =
-        await client.fetch<
-          FundraiserDocument | null
-        >(
-          `
-          *[
-            _type == "fundraiser"
-            &&
-            (
-              phone == $raw
-              ||
-              phone == $international
-              ||
-              phone == $local
-            )
-          ][0]{
-            _id,
-            name,
-            phone
-          }
-          `,
-          {
-            raw:
-              fundraiserPhone,
-
-            international:
-              internationalPhone,
-
-            local:
-              localNumber,
-          }
-        );
-    }
-
-    // ========================================================================
-    // 15. SANITY ATOMIC TRANSACTION
-    // ========================================================================
-
-    const donorKey =
-      `donor-${orderId}`
-        .replace(
-          /[^a-zA-Z0-9_-]/g,
-          '-'
-        )
-        .slice(
-          0,
-          100
-        );
-
-    let sanityTransaction =
+  async function commitPayment(
+    currentTransaction: DonationTransaction
+  ) {
+    let tx =
       client.transaction();
 
-    // ------------------------------------------------------------------------
-    // Update transaksi pembayaran
-    // ------------------------------------------------------------------------
+    // ------------------------------------------------------
+    // UPDATE TRANSAKSI
+    // ------------------------------------------------------
 
-    sanityTransaction =
-      sanityTransaction.patch(
-        transaction._id,
+    tx =
+      tx.patch(
+        currentTransaction._id,
         (patch) =>
           patch
             .ifRevisionId(
-              transaction._rev
+              currentTransaction._rev
             )
             .set({
               txnId,
+
               status:
                 'success',
 
@@ -879,23 +665,21 @@ export async function POST(
                 'completed',
 
               completedAt:
-                completedAt ||
-                new Date().toISOString(),
+                completedIso,
 
               paidAt:
-                completedAt ||
-                new Date().toISOString(),
+                completedIso,
 
               isSandbox,
             })
       );
 
-    // ------------------------------------------------------------------------
-    // Update nominal program + donor
-    // ------------------------------------------------------------------------
+    // ------------------------------------------------------
+    // UPDATE PROGRAM
+    // ------------------------------------------------------
 
-    sanityTransaction =
-      sanityTransaction.patch(
+    tx =
+      tx.patch(
         program._id,
         (patch) =>
           patch
@@ -937,9 +721,9 @@ export async function POST(
             )
       );
 
-    // ------------------------------------------------------------------------
-    // Fundraiser / ujrah
-    // ------------------------------------------------------------------------
+    // ------------------------------------------------------
+    // FUNDRAISER 10%
+    // ------------------------------------------------------
 
     if (fundraiser) {
       const ujrah =
@@ -947,20 +731,15 @@ export async function POST(
           amount * 0.1
         );
 
-      sanityTransaction =
-        sanityTransaction.patch(
+      tx =
+        tx.patch(
           fundraiser._id,
           (patch) =>
             patch
               .setIfMissing({
-                totalDanaDihimpun:
-                  0,
-
-                sisaSaldoFee:
-                  0,
-
-                totalTransaksiSukses:
-                  0,
+                totalDanaDihimpun: 0,
+                sisaSaldoFee: 0,
+                totalTransaksiSukses: 0,
               })
 
               .inc({
@@ -976,129 +755,362 @@ export async function POST(
         );
 
       console.log(
-        `💸 UJRAH Rp ${formatRupiah(ujrah)} → ${fundraiser.name || fundraiser.phone}`
+        `💸 UJRAH Rp ${formatRupiah(ujrah)} → ${
+          fundraiser.name ||
+          fundraiser.phone
+        }`
       );
     }
 
-    // ========================================================================
-    // 16. COMMIT
-    // ========================================================================
+    return tx.commit({
+      visibility: 'sync',
+    });
+  }
 
-    try {
-      await sanityTransaction.commit({
-        visibility: 'sync',
-      });
-    } catch (commitError) {
-      console.error(
-        '🔥 SANITY TRANSACTION ERROR:',
-        commitError
-      );
+  // --------------------------------------------------------------------------
+  // COMMIT PERTAMA
+  // --------------------------------------------------------------------------
 
-      // ======================================================================
-      // Cek apakah webhook lain sudah menyelesaikannya
-      // ======================================================================
-
-      const refreshed =
-        await client.fetch<{
-          status?: string;
-        } | null>(
-          `
-          *[
-            _type == "donationTransaction"
-            &&
-            _id == $id
-          ][0]{
-            status
-          }
-          `,
-          {
-            id:
-              transaction._id,
-          }
-        );
-
-      if (
-        refreshed?.status ===
-          'success'
-      ) {
-        return NextResponse.json({
-          success: true,
-          message:
-            'Transaksi sudah diproses oleh webhook lain.',
-        });
-      }
-
-      throw commitError;
-    }
-
-    console.log(
-      `✅ PAKASIR V2 COMPLETED: ${orderId}`
+  try {
+    await commitPayment(
+      transaction
     );
 
-    // ========================================================================
-    // 17. GOOGLE SHEET
-    // ========================================================================
+    console.log(
+      `✅ PEMBAYARAN BERHASIL: ${orderId}`
+    );
 
-    await appendToGoogleSheets({
-      date:
-        `${currentDate} ${currentTime}`,
+  } catch (firstError: any) {
 
-      orderId,
+    console.error(
+      '⚠️ COMMIT PERTAMA GAGAL:',
+      firstError?.message ||
+      firstError
+    );
 
-      txnId,
+    // ------------------------------------------------------------------------
+    // AMBIL REVISION TERBARU
+    // ------------------------------------------------------------------------
 
-      name:
-        donorName,
+    const refreshed =
+      await findTransaction(
+        txnId,
+        orderId
+      );
 
+    if (!refreshed) {
+      throw new Error(
+        'Transaksi hilang ketika retry commit.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // Kalau webhook lain sudah berhasil
+    // ------------------------------------------------------------------------
+
+    if (
+      refreshed.status ===
+        'success' ||
+      refreshed.gatewayStatus ===
+        'completed'
+    ) {
+      console.log(
+        `✅ TRANSAKSI SUDAH DIPROSES WEBHOOK LAIN: ${orderId}`
+      );
+
+      return {
+        alreadyProcessed: true,
+        transaction: refreshed,
+      };
+    }
+
+    // ------------------------------------------------------------------------
+    // RETRY DENGAN REVISION TERBARU
+    // ------------------------------------------------------------------------
+
+    console.log(
+      `🔄 RETRY COMMIT SANITY: ${orderId}`
+    );
+
+    await commitPayment(
+      refreshed
+    );
+
+    console.log(
+      `✅ RETRY COMMIT BERHASIL: ${orderId}`
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // GOOGLE SHEETS
+  // --------------------------------------------------------------------------
+
+  await appendToGoogleSheets({
+    date:
+      `${currentDate} ${currentTime}`,
+
+    orderId,
+
+    txnId,
+
+    name:
+      donorName,
+
+    phone:
+      donorPhone,
+
+    amount,
+
+    program:
+      program.title ||
+      programSlug,
+  });
+
+  // --------------------------------------------------------------------------
+  // WHATSAPP
+  // --------------------------------------------------------------------------
+
+  if (donorPhone) {
+    await sendWhatsappReceipt({
       phone:
         donorPhone,
 
-      amount,
+      donorName,
 
-      program:
+      orderId,
+
+      programName:
         program.title ||
         programSlug,
+
+      amount,
+
+      paymentMethod,
+
+      date:
+        currentDate,
+
+      time:
+        currentTime,
     });
+  }
 
-    // ========================================================================
-    // 18. WHATSAPP
-    // ========================================================================
+  return {
+    alreadyProcessed: false,
+    success: true,
+  };
+}
 
-    if (donorPhone) {
-      await sendWhatsappReceipt({
-        phone:
-          donorPhone,
+// ============================================================================
+// POST = WEBHOOK PAKASIR
+// ============================================================================
 
-        donorName,
+export async function POST(
+  request: Request
+) {
+  try {
+    // ------------------------------------------------------------------------
+    // ENV
+    // ------------------------------------------------------------------------
 
-        orderId,
-
-        programName:
-          program.title ||
-          programSlug,
-
-        amount,
-
-        paymentMethod,
-
-        date:
-          currentDate,
-
-        time:
-          currentTime,
-      });
+    if (!SANITY_TOKEN) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'SANITY_API_WRITE_TOKEN belum dikonfigurasi.',
+        },
+        {
+          status: 500,
+        }
+      );
     }
 
-    // ========================================================================
-    // 19. RESPONSE WAJIB 200
-    // ========================================================================
+    if (!PAKASIR_WEBHOOK_SECRET) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'PAKASIR_WEBHOOK_SECRET belum dikonfigurasi.',
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // SECRET
+    // ------------------------------------------------------------------------
+
+    const incomingSecret =
+      request.headers.get(
+        'x-secret'
+      ) || '';
+
+    if (
+      !incomingSecret ||
+      incomingSecret !==
+        PAKASIR_WEBHOOK_SECRET
+    ) {
+      console.error(
+        '❌ WEBHOOK DITOLAK: X-Secret tidak cocok.'
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Unauthorized webhook.',
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // PAYLOAD
+    // ------------------------------------------------------------------------
+
+    const payload =
+      await request.json();
+
+    const txnId =
+      String(
+        payload?.txn_id ||
+        ''
+      ).trim();
+
+    const orderId =
+      String(
+        payload?.order_id ||
+        ''
+      ).trim();
+
+    const amount =
+      safeNumber(
+        payload?.amount
+      );
+
+    const status =
+      String(
+        payload?.status ||
+        ''
+      )
+        .toLowerCase()
+        .trim();
+
+    const completedAt =
+      String(
+        payload?.completed_at ||
+        ''
+      ).trim();
+
+    const isSandbox =
+      Boolean(
+        payload?.is_sandbox
+      );
+
+    console.log(
+      '📥 PAKASIR WEBHOOK:',
+      {
+        txnId,
+        orderId,
+        amount,
+        status,
+        isSandbox,
+      }
+    );
+
+    // ------------------------------------------------------------------------
+    // VALIDASI
+    // ------------------------------------------------------------------------
+
+    if (!txnId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'txn_id tidak ditemukan.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!orderId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'order_id tidak ditemukan.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (amount <= 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Nominal transaksi tidak valid.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // HANYA COMPLETED
+    // ------------------------------------------------------------------------
+
+    if (
+      status !==
+      'completed'
+    ) {
+      console.warn(
+        `⚠️ Status ${status} diabaikan.`
+      );
+
+      return NextResponse.json(
+        {
+          success: true,
+          message:
+            `Status ${status || '-'} diabaikan.`,
+        },
+        {
+          status: 200,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // PROSES
+    // ------------------------------------------------------------------------
+
+    const result =
+      await processSuccessfulPayment({
+        txnId,
+        orderId,
+        amount,
+        completedAt,
+        isSandbox,
+      });
 
     return NextResponse.json(
       {
         success: true,
 
         message:
-          'Webhook Pakasir berhasil diproses.',
+          result.alreadyProcessed
+            ? 'Transaksi sudah diproses sebelumnya.'
+            : 'Webhook Pakasir berhasil diproses.',
 
         data: {
           txnId,
@@ -1112,15 +1124,17 @@ export async function POST(
         status: 200,
       }
     );
+
   } catch (error: any) {
+
     console.error(
       '🔥 CRITICAL PAKASIR WEBHOOK ERROR:',
       {
         message:
           error?.message,
 
-        statusCode:
-          error?.statusCode,
+        stack:
+          error?.stack,
 
         responseBody:
           error?.response?.body,
@@ -1134,6 +1148,375 @@ export async function POST(
         error:
           error?.message ||
           'Terjadi kesalahan ketika memproses webhook.',
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+// ============================================================================
+// GET = CEK STATUS PAKASIR V2 + SINKRONISASI
+//
+// Contoh:
+// /api/pakasir/webhook?order_id=INV-ASYIQ-xxxx
+//
+// atau:
+// /api/pakasir/webhook?txn_id=xxxx
+//
+// Wajib header:
+// x-sync-secret: PAKASIR_WEBHOOK_SECRET
+// ============================================================================
+
+export async function GET(
+  request: Request
+) {
+  try {
+
+    // ------------------------------------------------------------------------
+    // SECURITY
+    // ------------------------------------------------------------------------
+
+    const syncSecret =
+      request.headers.get(
+        'x-sync-secret'
+      ) || '';
+
+    if (
+      !syncSecret ||
+      syncSecret !==
+        PAKASIR_WEBHOOK_SECRET
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Unauthorized.',
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // QUERY
+    // ------------------------------------------------------------------------
+
+    const url =
+      new URL(
+        request.url
+      );
+
+    const requestedTxnId =
+      String(
+        url.searchParams.get(
+          'txn_id'
+        ) || ''
+      ).trim();
+
+    const requestedOrderId =
+      String(
+        url.searchParams.get(
+          'order_id'
+        ) || ''
+      ).trim();
+
+    if (
+      !requestedTxnId &&
+      !requestedOrderId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Masukkan txn_id atau order_id.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // CARI TRANSAKSI SANITY
+    // ------------------------------------------------------------------------
+
+    const transaction =
+      await findTransaction(
+        requestedTxnId,
+        requestedOrderId
+      );
+
+    if (!transaction) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Transaksi tidak ditemukan di Sanity.',
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const txnId =
+      String(
+        transaction.txnId ||
+        requestedTxnId ||
+        ''
+      ).trim();
+
+    const orderId =
+      String(
+        transaction.orderId ||
+        requestedOrderId ||
+        ''
+      ).trim();
+
+    if (!txnId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'txnId transaksi tidak tersedia.',
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // CEK STATUS PAKASIR
+    // ------------------------------------------------------------------------
+
+    if (!PAKASIR_API_KEY) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'PAKASIR_API_KEY belum dikonfigurasi.',
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const pakasirUrl =
+      `https://app.pakasir.com/api/v2/transaction-status/` +
+      `${encodeURIComponent(PAKASIR_PROJECT)}/` +
+      `${encodeURIComponent(txnId)}`;
+
+    const response =
+      await fetch(
+        pakasirUrl,
+        {
+          method: 'GET',
+
+          headers: {
+            'X-Api-Key':
+              PAKASIR_API_KEY,
+
+            Accept:
+              'application/json',
+          },
+
+          cache:
+            'no-store',
+        }
+      );
+
+    const data =
+      await response
+        .json()
+        .catch(() => null);
+
+    console.log(
+      '🔎 PAKASIR STATUS:',
+      {
+        txnId,
+        orderId,
+        httpStatus:
+          response.status,
+        data,
+      }
+    );
+
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+
+          message:
+            data?.message ||
+            data?.error ||
+            `Pakasir HTTP ${response.status}`,
+
+          pakasir:
+            data,
+        },
+        {
+          status:
+            response.status,
+        }
+      );
+    }
+
+    const gatewayStatus =
+      String(
+        data?.status ||
+        ''
+      )
+        .toLowerCase()
+        .trim();
+
+    // ------------------------------------------------------------------------
+    // BELUM LUNAS
+    // ------------------------------------------------------------------------
+
+    if (
+      gatewayStatus !==
+      'completed'
+    ) {
+      return NextResponse.json(
+        {
+          success: true,
+
+          synchronized:
+            false,
+
+          message:
+            `Status Pakasir masih ${gatewayStatus || 'unknown'}.`,
+
+          data: {
+            txnId,
+            orderId,
+            sanityStatus:
+              transaction.status ||
+              'pending',
+
+            pakasirStatus:
+              gatewayStatus,
+          },
+        },
+        {
+          status: 200,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // VALIDASI NOMINAL
+    // ------------------------------------------------------------------------
+
+    const pakasirAmount =
+      safeNumber(
+        data?.amount
+      );
+
+    const sanityAmount =
+      safeNumber(
+        transaction.amount
+      );
+
+    if (
+      pakasirAmount > 0 &&
+      sanityAmount !==
+        pakasirAmount
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+
+          message:
+            'Nominal Pakasir dan Sanity tidak cocok.',
+
+          data: {
+            txnId,
+            orderId,
+            sanityAmount,
+            pakasirAmount,
+          },
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // SINKRONISASI
+    // ------------------------------------------------------------------------
+
+    const result =
+      await processSuccessfulPayment({
+        txnId,
+
+        orderId,
+
+        amount:
+          pakasirAmount ||
+          sanityAmount,
+
+        completedAt:
+          String(
+            data?.completed_at ||
+            ''
+          ).trim(),
+
+        isSandbox:
+          Boolean(
+            data?.is_sandbox
+          ),
+      });
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        synchronized:
+          true,
+
+        alreadyProcessed:
+          result.alreadyProcessed,
+
+        message:
+          result.alreadyProcessed
+            ? 'Transaksi sudah success.'
+            : 'Transaksi berhasil disinkronkan menjadi success.',
+
+        data: {
+          txnId,
+          orderId,
+          pakasirStatus:
+            gatewayStatus,
+          sanityStatus:
+            'success',
+        },
+      },
+      {
+        status: 200,
+      }
+    );
+
+  } catch (error: any) {
+
+    console.error(
+      '🔥 PAKASIR STATUS ERROR:',
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+
+        error:
+          error?.message ||
+          'Gagal mengecek status Pakasir.',
       },
       {
         status: 500,
