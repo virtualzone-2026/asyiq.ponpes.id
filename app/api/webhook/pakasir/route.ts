@@ -24,15 +24,15 @@ const PAKASIR_API_KEY =
 const PAKASIR_WEBHOOK_SECRET =
   process.env.PAKASIR_WEBHOOK_SECRET || '';
 
+const PAKASIR_PROJECT =
+  'pondok-pesantren-aasyiqul-quran';
+
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   'https://www.asyiq.ponpes.id';
 
-const PAKASIR_PROJECT =
-  'pondok-pesantren-aasyiqul-quran';
-
 // ============================================================================
-// SANITY
+// SANITY CLIENT
 // ============================================================================
 
 const client = createClient({
@@ -58,6 +58,8 @@ interface DonationTransaction {
   donorPhone?: string;
 
   amount?: number;
+  fee?: number;
+  totalAmount?: number;
 
   status?: string;
   gatewayStatus?: string;
@@ -65,10 +67,21 @@ interface DonationTransaction {
   slug?: string;
 
   paymentMethod?: string;
+  paymentNumber?: string;
+  paymentUrl?: string;
+  qrString?: string;
+  vaNumber?: string;
 
-  fundraiserPhone?: string;
+  expiredAt?: string;
 
   isSandbox?: boolean;
+
+  createdAt?: string;
+  createdAtWib?: string;
+  completedAt?: string;
+  paidAt?: string;
+
+  fundraiserPhone?: string;
 }
 
 interface ProgramDocument {
@@ -99,7 +112,7 @@ interface PakasirStatusResponse {
 }
 
 // ============================================================================
-// HELPERS
+// HELPER
 // ============================================================================
 
 function safeNumber(value: unknown): number {
@@ -109,6 +122,10 @@ function safeNumber(value: unknown): number {
     ? parsed
     : 0;
 }
+
+// ============================================================================
+// NORMALIZE NOMOR WHATSAPP
+// ============================================================================
 
 function normalizePhone(value: unknown): string {
   const raw = String(value || '')
@@ -133,20 +150,9 @@ function normalizePhone(value: unknown): string {
   return raw;
 }
 
-function localPhone(value: unknown): string {
-  const raw = String(value || '')
-    .replace(/[^0-9]/g, '');
-
-  if (!raw) {
-    return '';
-  }
-
-  if (raw.startsWith('62')) {
-    return `0${raw.slice(2)}`;
-  }
-
-  return raw;
-}
+// ============================================================================
+// FORMAT RUPIAH
+// ============================================================================
 
 function formatRupiah(value: number): string {
   return new Intl.NumberFormat('id-ID').format(value);
@@ -194,6 +200,7 @@ async function appendToGoogleSheets(data: {
           client_email: email,
           private_key: privateKey,
         },
+
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets',
         ],
@@ -215,8 +222,12 @@ async function appendToGoogleSheets(data: {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Sheet1!A:G',
-      valueInputOption: 'USER_ENTERED',
+
+      range:
+        'Sheet1!A:G',
+
+      valueInputOption:
+        'USER_ENTERED',
 
       requestBody: {
         values: [
@@ -245,7 +256,7 @@ async function appendToGoogleSheets(data: {
 }
 
 // ============================================================================
-// WHATSAPP FONNTE
+// FONNTE WHATSAPP
 // ============================================================================
 
 async function sendWhatsappReceipt(data: {
@@ -274,6 +285,10 @@ async function sendWhatsappReceipt(data: {
       normalizePhone(data.phone);
 
     if (!phone) {
+      console.warn(
+        `⚠️ Nomor WhatsApp kosong: ${data.orderId}`
+      );
+
       return;
     }
 
@@ -303,10 +318,11 @@ _Amanah dalam menyalurkan kebaikan_`;
             Authorization: token,
           },
 
-          body: new URLSearchParams({
-            target: phone,
-            message,
-          }),
+          body:
+            new URLSearchParams({
+              target: phone,
+              message,
+            }),
 
           cache: 'no-store',
         }
@@ -334,37 +350,58 @@ _Amanah dalam menyalurkan kebaikan_`;
 }
 
 // ============================================================================
-// CARI TRANSAKSI
+// CARI TRANSAKSI DI SANITY
 // ============================================================================
 
 async function findTransaction(
   txnId: string,
   orderId: string
-) {
+): Promise<DonationTransaction | null> {
   return client.fetch<DonationTransaction | null>(
     `
     *[
       _type == "donationTransaction"
       &&
       (
-        txnId == $txnId
+        ($txnId != "" && txnId == $txnId)
         ||
-        orderId == $orderId
+        ($orderId != "" && orderId == $orderId)
       )
     ][0]{
       _id,
       _rev,
+
       txnId,
       orderId,
+
       donorName,
       donorPhone,
+
       amount,
+      fee,
+      totalAmount,
+
       status,
       gatewayStatus,
+
       slug,
+
       paymentMethod,
-      fundraiserPhone,
-      isSandbox
+      paymentNumber,
+      paymentUrl,
+      qrString,
+      vaNumber,
+
+      expiredAt,
+
+      isSandbox,
+
+      createdAt,
+      createdAtWib,
+      completedAt,
+      paidAt,
+
+      fundraiserPhone
     }
     `,
     {
@@ -380,7 +417,7 @@ async function findTransaction(
 
 async function findProgram(
   slug: string
-) {
+): Promise<ProgramDocument | null> {
   return client.fetch<ProgramDocument | null>(
     `
     *[
@@ -404,7 +441,7 @@ async function findProgram(
 
 async function findFundraiser(
   phone: string
-) {
+): Promise<FundraiserDocument | null> {
   if (!phone) {
     return null;
   }
@@ -413,7 +450,9 @@ async function findFundraiser(
     normalizePhone(phone);
 
   const local =
-    localPhone(phone);
+    international.startsWith('62')
+      ? `0${international.slice(2)}`
+      : phone;
 
   return client.fetch<FundraiserDocument | null>(
     `
@@ -442,7 +481,7 @@ async function findFundraiser(
 }
 
 // ============================================================================
-// PROSES TRANSAKSI BERHASIL
+// PROSES PEMBAYARAN BERHASIL
 // ============================================================================
 
 async function processSuccessfulPayment(data: {
@@ -460,9 +499,9 @@ async function processSuccessfulPayment(data: {
     isSandbox = false,
   } = data;
 
-  // --------------------------------------------------------------------------
-  // AMBIL TRANSAKSI TERBARU
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // CARI TRANSAKSI
+  // ==========================================================================
 
   let transaction =
     await findTransaction(
@@ -472,13 +511,13 @@ async function processSuccessfulPayment(data: {
 
   if (!transaction) {
     throw new Error(
-      `Transaksi tidak ditemukan: ${orderId}`
+      `Transaksi tidak ditemukan di Sanity: ${orderId}`
     );
   }
 
-  // --------------------------------------------------------------------------
-  // VALIDASI
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // VALIDASI TXN ID
+  // ==========================================================================
 
   if (
     transaction.txnId &&
@@ -489,6 +528,10 @@ async function processSuccessfulPayment(data: {
     );
   }
 
+  // ==========================================================================
+  // VALIDASI ORDER ID
+  // ==========================================================================
+
   if (
     transaction.orderId !== orderId
   ) {
@@ -497,8 +540,14 @@ async function processSuccessfulPayment(data: {
     );
   }
 
+  // ==========================================================================
+  // VALIDASI NOMINAL
+  // ==========================================================================
+
   const localAmount =
-    safeNumber(transaction.amount);
+    safeNumber(
+      transaction.amount
+    );
 
   if (
     localAmount !== amount
@@ -508,9 +557,9 @@ async function processSuccessfulPayment(data: {
     );
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // IDEMPOTENCY
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   if (
     transaction.status === 'success' ||
@@ -526,9 +575,9 @@ async function processSuccessfulPayment(data: {
     };
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // DATA TRANSAKSI
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   const donorName =
     String(
@@ -560,9 +609,13 @@ async function processSuccessfulPayment(data: {
 
   if (!programSlug) {
     throw new Error(
-      'Slug program tidak ditemukan.'
+      `Slug program tidak ditemukan untuk transaksi ${orderId}.`
     );
   }
+
+  // ==========================================================================
+  // CARI PROGRAM
+  // ==========================================================================
 
   const program =
     await findProgram(
@@ -575,6 +628,24 @@ async function processSuccessfulPayment(data: {
     );
   }
 
+  // ==========================================================================
+  // FIX TYPESCRIPT
+  //
+  // Jangan menggunakan "program._id" langsung di dalam closure.
+  // Ambil nilai primitif setelah null-check.
+  // ==========================================================================
+
+  const programId =
+    program._id;
+
+  const programTitle =
+    program.title ||
+    programSlug;
+
+  // ==========================================================================
+  // FUNDRAISER
+  // ==========================================================================
+
   const fundraiserPhone =
     String(
       transaction.fundraiserPhone ||
@@ -586,9 +657,9 @@ async function processSuccessfulPayment(data: {
       fundraiserPhone
     );
 
-  // --------------------------------------------------------------------------
-  // WAKTU
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // WAKTU PEMBAYARAN
+  // ==========================================================================
 
   const finalDate =
     completedAt
@@ -599,10 +670,17 @@ async function processSuccessfulPayment(data: {
     finalDate.toLocaleDateString(
       'id-ID',
       {
-        timeZone: 'Asia/Jakarta',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
+        timeZone:
+          'Asia/Jakarta',
+
+        day:
+          'numeric',
+
+        month:
+          'long',
+
+        year:
+          'numeric',
       }
     );
 
@@ -610,10 +688,17 @@ async function processSuccessfulPayment(data: {
     finalDate.toLocaleTimeString(
       'id-ID',
       {
-        timeZone: 'Asia/Jakarta',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
+        timeZone:
+          'Asia/Jakarta',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+
+        hour12:
+          false,
       }
     );
 
@@ -621,9 +706,11 @@ async function processSuccessfulPayment(data: {
     completedAt ||
     new Date().toISOString();
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // DONOR KEY
-  // --------------------------------------------------------------------------
+  //
+  // Dibuat unik berdasarkan order ID.
+  // ==========================================================================
 
   const donorKey =
     `donor-${orderId}`
@@ -633,9 +720,9 @@ async function processSuccessfulPayment(data: {
       )
       .slice(0, 100);
 
-  // --------------------------------------------------------------------------
-  // FUNGSI COMMIT
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // COMMIT KE SANITY
+  // ==========================================================================
 
   async function commitPayment(
     currentTransaction: DonationTransaction
@@ -643,9 +730,9 @@ async function processSuccessfulPayment(data: {
     let tx =
       client.transaction();
 
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
     // UPDATE TRANSAKSI
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     tx =
       tx.patch(
@@ -674,13 +761,13 @@ async function processSuccessfulPayment(data: {
             })
       );
 
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
     // UPDATE PROGRAM
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     tx =
       tx.patch(
-        program._id,
+        programId,
         (patch) =>
           patch
             .setIfMissing({
@@ -721,9 +808,9 @@ async function processSuccessfulPayment(data: {
             )
       );
 
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
     // FUNDRAISER 10%
-    // ------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     if (fundraiser) {
       const ujrah =
@@ -757,19 +844,25 @@ async function processSuccessfulPayment(data: {
       console.log(
         `💸 UJRAH Rp ${formatRupiah(ujrah)} → ${
           fundraiser.name ||
-          fundraiser.phone
+          fundraiser.phone ||
+          fundraiser._id
         }`
       );
     }
 
+    // ------------------------------------------------------------------------
+    // COMMIT
+    // ------------------------------------------------------------------------
+
     return tx.commit({
-      visibility: 'sync',
+      visibility:
+        'sync',
     });
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // COMMIT PERTAMA
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   try {
     await commitPayment(
@@ -788,9 +881,9 @@ async function processSuccessfulPayment(data: {
       firstError
     );
 
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // AMBIL REVISION TERBARU
-    // ------------------------------------------------------------------------
+    // ========================================================================
 
     const refreshed =
       await findTransaction(
@@ -800,13 +893,13 @@ async function processSuccessfulPayment(data: {
 
     if (!refreshed) {
       throw new Error(
-        'Transaksi hilang ketika retry commit.'
+        'Transaksi tidak ditemukan ketika melakukan retry commit.'
       );
     }
 
-    // ------------------------------------------------------------------------
-    // Kalau webhook lain sudah berhasil
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // CEK APAKAH WEBHOOK LAIN SUDAH BERHASIL
+    // ========================================================================
 
     if (
       refreshed.status ===
@@ -819,14 +912,17 @@ async function processSuccessfulPayment(data: {
       );
 
       return {
-        alreadyProcessed: true,
-        transaction: refreshed,
+        alreadyProcessed:
+          true,
+
+        transaction:
+          refreshed,
       };
     }
 
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // RETRY DENGAN REVISION TERBARU
-    // ------------------------------------------------------------------------
+    // ========================================================================
 
     console.log(
       `🔄 RETRY COMMIT SANITY: ${orderId}`
@@ -841,9 +937,9 @@ async function processSuccessfulPayment(data: {
     );
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // GOOGLE SHEETS
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   await appendToGoogleSheets({
     date:
@@ -862,13 +958,12 @@ async function processSuccessfulPayment(data: {
     amount,
 
     program:
-      program.title ||
-      programSlug,
+      programTitle,
   });
 
-  // --------------------------------------------------------------------------
-  // WHATSAPP
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // WHATSAPP DONATUR
+  // ==========================================================================
 
   if (donorPhone) {
     await sendWhatsappReceipt({
@@ -880,8 +975,7 @@ async function processSuccessfulPayment(data: {
       orderId,
 
       programName:
-        program.title ||
-        programSlug,
+        programTitle,
 
       amount,
 
@@ -895,33 +989,45 @@ async function processSuccessfulPayment(data: {
     });
   }
 
+  // ==========================================================================
+  // SELESAI
+  // ==========================================================================
+
   return {
-    alreadyProcessed: false,
-    success: true,
+    alreadyProcessed:
+      false,
+
+    success:
+      true,
   };
 }
 
 // ============================================================================
-// POST = WEBHOOK PAKASIR
+// POST
+// WEBHOOK PAKASIR V2
 // ============================================================================
 
 export async function POST(
   request: Request
 ) {
   try {
-    // ------------------------------------------------------------------------
-    // ENV
-    // ------------------------------------------------------------------------
+
+    // ==========================================================================
+    // VALIDASI ENV
+    // ==========================================================================
 
     if (!SANITY_TOKEN) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'SANITY_API_WRITE_TOKEN belum dikonfigurasi.',
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
@@ -929,19 +1035,22 @@ export async function POST(
     if (!PAKASIR_WEBHOOK_SECRET) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'PAKASIR_WEBHOOK_SECRET belum dikonfigurasi.',
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // SECRET
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // CEK X-SECRET
+    // ==========================================================================
 
     const incomingSecret =
       request.headers.get(
@@ -959,19 +1068,22 @@ export async function POST(
 
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'Unauthorized webhook.',
         },
         {
-          status: 401,
+          status:
+            401,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // PAYLOAD
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // BACA PAYLOAD
+    // ==========================================================================
 
     const payload =
       await request.json();
@@ -1019,93 +1131,123 @@ export async function POST(
         orderId,
         amount,
         status,
+        completedAt,
         isSandbox,
       }
     );
 
-    // ------------------------------------------------------------------------
-    // VALIDASI
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // VALIDASI TXN ID
+    // ==========================================================================
 
     if (!txnId) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'txn_id tidak ditemukan.',
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
+
+    // ==========================================================================
+    // VALIDASI ORDER ID
+    // ==========================================================================
 
     if (!orderId) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'order_id tidak ditemukan.',
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
+
+    // ==========================================================================
+    // VALIDASI AMOUNT
+    // ==========================================================================
 
     if (amount <= 0) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'Nominal transaksi tidak valid.',
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // HANYA COMPLETED
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // HANYA PROSES COMPLETED
+    // ==========================================================================
 
     if (
       status !==
       'completed'
     ) {
       console.warn(
-        `⚠️ Status ${status} diabaikan.`
+        `⚠️ Status Pakasir "${status}" diabaikan.`
       );
 
       return NextResponse.json(
         {
-          success: true,
+          success:
+            true,
+
           message:
             `Status ${status || '-'} diabaikan.`,
         },
         {
-          status: 200,
+          status:
+            200,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // PROSES
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // PROSES PEMBAYARAN
+    // ==========================================================================
 
     const result =
       await processSuccessfulPayment({
         txnId,
+
         orderId,
+
         amount,
+
         completedAt,
+
         isSandbox,
       });
 
+    // ==========================================================================
+    // RESPONSE
+    // ==========================================================================
+
     return NextResponse.json(
       {
-        success: true,
+        success:
+          true,
 
         message:
           result.alreadyProcessed
@@ -1114,14 +1256,18 @@ export async function POST(
 
         data: {
           txnId,
+
           orderId,
+
           amount,
+
           status:
             'completed',
         },
       },
       {
-        status: 200,
+        status:
+          200,
       }
     );
 
@@ -1135,38 +1281,42 @@ export async function POST(
 
         stack:
           error?.stack,
-
-        responseBody:
-          error?.response?.body,
       }
     );
 
     return NextResponse.json(
       {
-        success: false,
+        success:
+          false,
 
         error:
           error?.message ||
           'Terjadi kesalahan ketika memproses webhook.',
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
 }
 
 // ============================================================================
-// GET = CEK STATUS PAKASIR V2 + SINKRONISASI
+// GET
+// CEK STATUS TRANSAKSI LANGSUNG KE PAKASIR V2
 //
 // Contoh:
-// /api/pakasir/webhook?order_id=INV-ASYIQ-xxxx
+//
+// /api/pakasir/webhook?order_id=INV-ASYIQ-1791090648504
 //
 // atau:
-// /api/pakasir/webhook?txn_id=xxxx
 //
-// Wajib header:
+// /api/pakasir/webhook?txn_id=XXXXXXXX
+//
+// Header:
+//
 // x-sync-secret: PAKASIR_WEBHOOK_SECRET
+//
 // ============================================================================
 
 export async function GET(
@@ -1174,9 +1324,9 @@ export async function GET(
 ) {
   try {
 
-    // ------------------------------------------------------------------------
+    // ==========================================================================
     // SECURITY
-    // ------------------------------------------------------------------------
+    // ==========================================================================
 
     const syncSecret =
       request.headers.get(
@@ -1190,19 +1340,22 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'Unauthorized.',
         },
         {
-          status: 401,
+          status:
+            401,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // QUERY
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // QUERY PARAMETER
+    // ==========================================================================
 
     const url =
       new URL(
@@ -1229,19 +1382,22 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'Masukkan txn_id atau order_id.',
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // CARI TRANSAKSI SANITY
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // CARI TRANSAKSI DI SANITY
+    // ==========================================================================
 
     const transaction =
       await findTransaction(
@@ -1252,15 +1408,22 @@ export async function GET(
     if (!transaction) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'Transaksi tidak ditemukan di Sanity.',
         },
         {
-          status: 404,
+          status:
+            404,
         }
       );
     }
+
+    // ==========================================================================
+    // AMBIL TXN ID
+    // ==========================================================================
 
     const txnId =
       String(
@@ -1268,6 +1431,10 @@ export async function GET(
         requestedTxnId ||
         ''
       ).trim();
+
+    // ==========================================================================
+    // AMBIL ORDER ID
+    // ==========================================================================
 
     const orderId =
       String(
@@ -1279,43 +1446,58 @@ export async function GET(
     if (!txnId) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'txnId transaksi tidak tersedia.',
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
-    // CEK STATUS PAKASIR
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // VALIDASI PAKASIR API KEY
+    // ==========================================================================
 
     if (!PAKASIR_API_KEY) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             'PAKASIR_API_KEY belum dikonfigurasi.',
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
+
+    // ==========================================================================
+    // REQUEST STATUS KE PAKASIR V2
+    // ==========================================================================
 
     const pakasirUrl =
       `https://app.pakasir.com/api/v2/transaction-status/` +
       `${encodeURIComponent(PAKASIR_PROJECT)}/` +
       `${encodeURIComponent(txnId)}`;
 
+    console.log(
+      `🔎 CEK STATUS PAKASIR: ${pakasirUrl}`
+    );
+
     const response =
       await fetch(
         pakasirUrl,
         {
-          method: 'GET',
+          method:
+            'GET',
 
           headers: {
             'X-Api-Key':
@@ -1333,23 +1515,31 @@ export async function GET(
     const data =
       await response
         .json()
-        .catch(() => null);
+        .catch(() => null) as PakasirStatusResponse | null;
 
     console.log(
-      '🔎 PAKASIR STATUS:',
+      '🔎 PAKASIR STATUS RESPONSE:',
       {
         txnId,
+
         orderId,
+
         httpStatus:
           response.status,
+
         data,
       }
     );
 
+    // ==========================================================================
+    // PAKASIR ERROR
+    // ==========================================================================
+
     if (!response.ok) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             data?.message ||
@@ -1366,6 +1556,10 @@ export async function GET(
       );
     }
 
+    // ==========================================================================
+    // STATUS GATEWAY
+    // ==========================================================================
+
     const gatewayStatus =
       String(
         data?.status ||
@@ -1374,9 +1568,9 @@ export async function GET(
         .toLowerCase()
         .trim();
 
-    // ------------------------------------------------------------------------
-    // BELUM LUNAS
-    // ------------------------------------------------------------------------
+    // ==========================================================================
+    // BELUM COMPLETED
+    // ==========================================================================
 
     if (
       gatewayStatus !==
@@ -1384,7 +1578,8 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          success: true,
+          success:
+            true,
 
           synchronized:
             false,
@@ -1394,24 +1589,26 @@ export async function GET(
 
           data: {
             txnId,
+
             orderId,
+
             sanityStatus:
               transaction.status ||
               'pending',
 
-            pakasirStatus:
-              gatewayStatus,
+            gatewayStatus,
           },
         },
         {
-          status: 200,
+          status:
+            200,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
+    // ==========================================================================
     // VALIDASI NOMINAL
-    // ------------------------------------------------------------------------
+    // ==========================================================================
 
     const pakasirAmount =
       safeNumber(
@@ -1430,27 +1627,32 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             'Nominal Pakasir dan Sanity tidak cocok.',
 
           data: {
             txnId,
+
             orderId,
+
             sanityAmount,
+
             pakasirAmount,
           },
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    // ------------------------------------------------------------------------
+    // ==========================================================================
     // SINKRONISASI
-    // ------------------------------------------------------------------------
+    // ==========================================================================
 
     const result =
       await processSuccessfulPayment({
@@ -1474,9 +1676,14 @@ export async function GET(
           ),
       });
 
+    // ==========================================================================
+    // RESPONSE
+    // ==========================================================================
+
     return NextResponse.json(
       {
-        success: true,
+        success:
+          true,
 
         synchronized:
           true,
@@ -1491,15 +1698,19 @@ export async function GET(
 
         data: {
           txnId,
+
           orderId,
+
           pakasirStatus:
             gatewayStatus,
+
           sanityStatus:
             'success',
         },
       },
       {
-        status: 200,
+        status:
+          200,
       }
     );
 
@@ -1507,19 +1718,27 @@ export async function GET(
 
     console.error(
       '🔥 PAKASIR STATUS ERROR:',
-      error
+      {
+        message:
+          error?.message,
+
+        stack:
+          error?.stack,
+      }
     );
 
     return NextResponse.json(
       {
-        success: false,
+        success:
+          false,
 
         error:
           error?.message ||
           'Gagal mengecek status Pakasir.',
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
