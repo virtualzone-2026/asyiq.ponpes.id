@@ -4,14 +4,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@sanity/client';
 
 // ============================================================================
-// KONFIGURASI
-// ============================================================================
-//
-// PENTING:
-// Endpoint ini menampilkan nominal donasi.
-// Karena collectedRaw dapat berubah setelah pembayaran sukses,
-// JANGAN menggunakan Sanity CDN / cache lama di sini.
-//
+// CONFIG
 // ============================================================================
 
 export const dynamic = 'force-dynamic';
@@ -20,272 +13,184 @@ export const revalidate = 0;
 // ============================================================================
 // SANITY CLIENT
 // ============================================================================
-//
-// useCdn: false
-// = selalu membaca data terbaru dari Sanity.
-//
-// Tidak perlu SANITY_API_WRITE_TOKEN karena endpoint ini hanya membaca data.
-//
-// ============================================================================
+
+const projectId =
+  process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'lsnco71s';
+
+const dataset =
+  process.env.NEXT_PUBLIC_SANITY_DATASET || 'production';
+
+const token =
+  process.env.SANITY_API_READ_TOKEN ||
+  process.env.SANITY_API_WRITE_TOKEN ||
+  undefined;
 
 const client = createClient({
-  projectId:
-    process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ||
-    'lsnco71s',
-
-  dataset:
-    process.env.NEXT_PUBLIC_SANITY_DATASET ||
-    'production',
-
+  projectId,
+  dataset,
   apiVersion: '2026-01-01',
-
   useCdn: false,
+  token,
 });
 
 // ============================================================================
-// HELPER
+// TYPES
 // ============================================================================
 
-function safeNumber(
-  value: unknown,
-  fallback = 0
-): number {
-  const number = Number(value);
+interface SanityProgram {
+  _id: string;
+  slug?: string;
+  title?: string;
+  category?: string;
+  image?: string | null;
+  collectedRaw?: number | null;
+  targetAmount?: number | null;
+  description?: unknown;
+  donors?: unknown[];
+  reports?: unknown[];
+}
 
-  if (
-    !Number.isFinite(number) ||
-    number < 0
-  ) {
-    return fallback;
-  }
-
-  return number;
+interface FormattedProgram {
+  id: string;
+  _id: string;
+  slug: string;
+  title: string;
+  category: string;
+  image: string;
+  collected: string;
+  collectedRaw: number;
+  target: string;
+  targetAmount: number;
+  description: unknown;
+  donors: unknown[];
+  reports: unknown[];
 }
 
 // ============================================================================
-// GET PROGRAM
+// HELPERS
+// ============================================================================
+
+function safeNumber(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^\d.-]/g, '');
+    const parsed = Number(cleaned);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function formatRupiah(value: number): string {
+  return `Rp ${value.toLocaleString('id-ID')}`;
+}
+
+// ============================================================================
+// GET /api/programs
 // ============================================================================
 
 export async function GET() {
   try {
     // ========================================================================
-    // QUERY
-    // ========================================================================
-    //
-    // _id sengaja dikembalikan karena CampaignDetailClient menggunakan:
-    //
-    // program?._id || program?.id
-    //
-    // collectedRaw juga dibaca langsung dari Sanity.
-    //
+    // QUERY SANITY
     // ========================================================================
 
     const query = `
-      *[_type == "program"]
-      | order(_createdAt desc)
-      {
+      *[_type == "program"] | order(_createdAt desc) {
         _id,
-
         "id": _id,
-
         "slug": slug.current,
-
         title,
-
         category,
-
         "image": image.asset->url,
-
         collectedRaw,
-
         targetAmount,
-
         description,
-
         donors,
-
         reports
       }
     `;
 
     // ========================================================================
-    // FETCH TANPA CDN
-    // ========================================================================
-    //
-    // Ini bagian paling penting untuk kasus:
-    //
-    // Sanity:
-    // status = Success
-    // gatewayStatus = completed
-    // collectedRaw = sudah bertambah
-    //
-    // tetapi website masih menampilkan Rp 0.
-    //
-    // useCdn:false memastikan request membaca data terbaru.
-    //
+    // FETCH DATA
     // ========================================================================
 
-    const sanityPrograms =
-      await client.fetch(
-        query,
-        {},
-        {
-          cache: 'no-store',
-          next: {
-            revalidate: 0,
-          },
-        }
-      );
+    const sanityPrograms = await client.fetch<SanityProgram[]>(
+      query,
+      {},
+      {
+        cache: 'no-store',
+        next: {
+          revalidate: 0,
+        },
+      }
+    );
 
     // ========================================================================
-    // VALIDASI DATA
+    // NORMALISASI DATA
     // ========================================================================
 
-    if (
-      !Array.isArray(
-        sanityPrograms
-      )
-    ) {
-      throw new Error(
-        'Data program dari Sanity tidak valid.'
-      );
-    }
-
-    // ========================================================================
-    // FORMAT DATA
-    // ========================================================================
-
-    const formattedData =
-      sanityPrograms.map(
-        (program: any) => {
-          const rawAmount =
-            safeNumber(
-              program?.collectedRaw,
-              0
+    const formattedData: FormattedProgram[] =
+      Array.isArray(sanityPrograms)
+        ? sanityPrograms.map((program) => {
+            const rawAmount = safeNumber(
+              program.collectedRaw
             );
 
-          const targetAmount =
-            safeNumber(
-              program?.targetAmount,
-              50_000_000
-            );
+            const targetAmount =
+              safeNumber(program.targetAmount) || 50000000;
 
-          return {
-            // ================================================================
-            // IDENTITAS
-            // ================================================================
+            return {
+              id: program._id,
+              _id: program._id,
 
-            _id:
-              program?._id ||
-              null,
+              slug: program.slug || '',
 
-            id:
-              program?.id ||
-              program?._id ||
-              null,
+              title:
+                program.title ||
+                'Program Donasi',
 
-            slug:
-              typeof program?.slug ===
-                'string'
-                ? program.slug
-                : '',
+              category:
+                program.category ||
+                'Kemanusiaan',
 
-            title:
-              typeof program?.title ===
-                'string'
-                ? program.title
-                : 'Program Donasi',
+              image:
+                program.image ||
+                'https://via.placeholder.com/385x176?text=No+Image',
 
-            // ================================================================
-            // KATEGORI
-            // ================================================================
+              collected:
+                formatRupiah(rawAmount),
 
-            category:
-              typeof program?.category ===
-                'string' &&
-              program.category.trim()
-                ? program.category
-                : 'Kemanusiaan',
+              collectedRaw:
+                rawAmount,
 
-            // ================================================================
-            // IMAGE
-            // ================================================================
+              target:
+                formatRupiah(targetAmount),
 
-            image:
-              typeof program?.image ===
-                'string' &&
-              program.image.trim()
-                ? program.image
-                : '/images/placeholder.jpg',
-
-            // ================================================================
-            // DANA TERKUMPUL
-            // ================================================================
-
-            collected:
-              `Rp ${rawAmount.toLocaleString(
-                'id-ID'
-              )}`,
-
-            collectedRaw:
-              rawAmount,
-
-            // ================================================================
-            // TARGET
-            // ================================================================
-
-            target:
-              `Rp ${targetAmount.toLocaleString(
-                'id-ID'
-              )}`,
-
-            targetAmount:
               targetAmount,
 
-            // ================================================================
-            // DESKRIPSI
-            // ================================================================
+              description:
+                program.description || null,
 
-            description:
-              program?.description ||
-              null,
+              donors:
+                Array.isArray(program.donors)
+                  ? program.donors
+                  : [],
 
-            // ================================================================
-            // DONATUR
-            // ================================================================
-
-            donors:
-              Array.isArray(
-                program?.donors
-              )
-                ? program.donors
-                : [],
-
-            // ================================================================
-            // LAPORAN
-            // ================================================================
-
-            reports:
-              Array.isArray(
-                program?.reports
-              )
-                ? program.reports
-                : [],
-          };
-        }
-      );
+              reports:
+                Array.isArray(program.reports)
+                  ? program.reports
+                  : [],
+            };
+          })
+        : [];
 
     // ========================================================================
     // RESPONSE
-    // ========================================================================
-    //
-    // JANGAN gunakan:
-    //
-    // s-maxage=60
-    //
-    // karena angka donasi harus segera berubah setelah webhook Pakasir
-    // memperbarui collectedRaw.
-    //
     // ========================================================================
 
     return NextResponse.json(
@@ -295,55 +200,47 @@ export async function GET() {
         data: formattedData,
 
         meta: {
-          count:
-            formattedData.length,
-
-          fetchedAt:
-            new Date().toISOString(),
+          count: formattedData.length,
+          fetchedAt: new Date().toISOString(),
         },
       },
       {
         status: 200,
 
         headers: {
-          'Content-Type':
-            'application/json',
+          'Content-Type': 'application/json',
 
-          // Tidak boleh disimpan oleh browser/CDN.
           'Cache-Control':
             'no-store, no-cache, must-revalidate, proxy-revalidate',
 
-          Pragma:
-            'no-cache',
+          Pragma: 'no-cache',
 
-          Expires:
-            '0',
+          Expires: '0',
+
+          Surrogate-Control: 'no-store',
         },
       }
     );
-
   } catch (error: unknown) {
-
     // ========================================================================
-    // ERROR HANDLING
+    // ERROR
     // ========================================================================
 
     console.error(
-      '🔥 [API PROGRAMS] Sanity Fetch Error:',
+      '🔥 Sanity Fetch Error [/api/programs]:',
       error
     );
 
     const message =
       error instanceof Error
         ? error.message
-        : 'Gagal mengambil data program dari Sanity.';
+        : 'Gagal mengambil data program.';
 
     return NextResponse.json(
       {
         success: false,
 
-        error:
-          message,
+        error: message,
 
         data: [],
       },
@@ -351,13 +248,8 @@ export async function GET() {
         status: 500,
 
         headers: {
-          'Content-Type':
-            'application/json',
-
-          'Cache-Control':
-            'no-store',
-          },
-        }
+          'Cache-Control': 'no-store',
+        },
       }
     );
   }
