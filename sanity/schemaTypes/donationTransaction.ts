@@ -102,6 +102,13 @@ export default defineType({
     }),
 
     defineField({
+      name: 'gatewayPaymentUrl',
+      title: 'Gateway Payment URL',
+      type: 'url',
+      readOnly: true,
+    }),
+
+    defineField({
       name: 'paymentNumber',
       title: 'Nomor Pembayaran',
       type: 'string',
@@ -142,7 +149,7 @@ export default defineType({
     }),
 
     // ============================================================
-    // STATUS PEMBAYARAN
+    // STATUS PEMBAYARAN & DIAGNOSIS
     // ============================================================
 
     defineField({
@@ -152,18 +159,9 @@ export default defineType({
       readOnly: true,
       options: {
         list: [
-          {
-            title: 'Pending',
-            value: 'pending',
-          },
-          {
-            title: 'Success',
-            value: 'success',
-          },
-          {
-            title: 'Failed',
-            value: 'failed',
-          },
+          { title: 'Pending', value: 'pending' },
+          { title: 'Success', value: 'success' },
+          { title: 'Failed', value: 'failed' },
         ],
         layout: 'dropdown',
       },
@@ -177,8 +175,43 @@ export default defineType({
       readOnly: true,
     }),
 
+    defineField({
+      name: 'creationStatus',
+      title: 'Status Pembuatan',
+      type: 'string',
+      readOnly: true,
+    }),
+
+    defineField({
+      name: 'gatewayHttpStatus',
+      title: 'HTTP Status Gateway',
+      type: 'number',
+      readOnly: true,
+    }),
+
+    defineField({
+      name: 'checkoutErrorCode',
+      title: 'Kode Error Checkout',
+      type: 'string',
+      readOnly: true,
+    }),
+
+    defineField({
+      name: 'checkoutErrorStage',
+      title: 'Tahap Error Checkout',
+      type: 'string',
+      readOnly: true,
+    }),
+
+    defineField({
+      name: 'gatewayErrorMessage',
+      title: 'Pesan Error Gateway',
+      type: 'text',
+      readOnly: true,
+    }),
+
     // ============================================================
-    // WAKTU TRANSAKSI
+    // WAKTU & INFORMASI SITUS
     // ============================================================
 
     defineField({
@@ -209,6 +242,20 @@ export default defineType({
       readOnly: true,
     }),
 
+    defineField({
+      name: 'siteName',
+      title: 'Nama Situs',
+      type: 'string',
+      readOnly: true,
+    }),
+
+    defineField({
+      name: 'siteUrl',
+      title: 'URL Situs',
+      type: 'url',
+      readOnly: true,
+    }),
+
     // ============================================================
     // FUNDRAISER / RELAWAN
     // ============================================================
@@ -235,14 +282,7 @@ export default defineType({
       txnId: 'txnId',
     },
 
-    prepare({
-      title,
-      orderId,
-      amount,
-      status,
-      paymentMethod,
-      txnId,
-    }) {
+    prepare({ title, orderId, amount, status, paymentMethod }) {
       const formattedAmount =
         typeof amount === 'number'
           ? new Intl.NumberFormat('id-ID').format(amount)
