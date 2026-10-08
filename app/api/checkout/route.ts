@@ -59,6 +59,31 @@ function sheetText(value: string): string {
   return /^[=+\-@\t\r\n]/.test(value) ? `'${value}` : value;
 }
 
+// Ambil hanya pesan singkat, bukan HTML, stack trace, atau seluruh respons gateway.
+function safeGatewayMessage(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  let message = value.trim();
+  if (!message || /<[^>]+>|\bat\s+\S+\s*\([^)]*:\d+|Traceback|SQLSTATE/i.test(message)) return '';
+  for (const secret of [API_KEY, WRITE_TOKEN, process.env.PAKASIR_WEBHOOK_SECRET || '']) {
+    if (secret) message = message.split(secret).join('[disembunyikan]');
+  }
+  message = message.replace(/(?:X-Api-Key|api[_ -]?key|token|secret|authorization)\s*[:=]\s*["']?[^\s,"'}]+/gi, '[kredensial disembunyikan]')
+    .replace(/\b[a-f0-9]{32,}\b/gi, '[disembunyikan]')
+    .replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ');
+  return message.slice(0, 300);
+}
+
+function extractGatewayMessage(value: unknown): string {
+  if (typeof value === 'string') return safeGatewayMessage(value);
+  if (!object(value)) return '';
+  for (const candidate of [value.message, value.error, value.detail,
+      object(value.error) ? value.error.message : undefined]) {
+    const message = safeGatewayMessage(candidate);
+    if (message) return message;
+  }
+  return '';
+}
+
 type Stage = 'config' | 'input' | 'sanity_create' | 'pakasir_request' |
   'pakasir_response' | 'sanity_txn_id' | 'payment_validation' | 'payment_url' | 'sanity_finalize';
 
@@ -180,26 +205,44 @@ export async function POST(request: Request) {
       body: JSON.stringify({ method, amount }), cache: 'no-store',
       signal: AbortSignal.timeout(20000),
     });
+    // Baca sekali: respons error bisa JSON, teks biasa, HTML, atau kosong.
+    const responseText = await response.text();
+    let data: unknown = null;
+    try { data = JSON.parse(responseText); } catch { /* Ditangani sesuai status di bawah. */ }
     if (!response.ok) {
       const gatewayCode = `PAKASIR_HTTP_${response.status}`;
+      const contentType = response.headers.get('content-type') || '';
+      const gatewayMessage = extractGatewayMessage(data) ||
+        (contentType.toLowerCase().includes('text/plain') ? safeGatewayMessage(responseText) : '');
       logFailure(stage, { status: response.status }, orderId, gatewayCode);
-      // Jangan biarkan kegagalan patch menutupi error asli dari Pakasir.
+      // Simpan diagnosis yang sudah dibersihkan. Jangan simpan respons mentah.
       await client.patch(documentId).set({
         creationStatus: response.status >= 500 ? 'unknown' : 'rejected',
         gatewayHttpStatus: response.status, checkoutErrorCode: gatewayCode,
+        checkoutErrorStage: stage,
+        gatewayErrorMessage: gatewayMessage || 'Tidak ada pesan aman yang tersedia.',
       }).commit().catch(() => undefined);
       const message = response.status === 401 || response.status === 403
-        ? 'Pakasir menolak akses. Pastikan PAKASIR_API_KEY berasal dari project yang sama dengan PAKASIR_PROJECT_SLUG, lalu redeploy.'
+        ? 'Pakasir menolak akses. Pastikan API Key dan slug berasal dari proyek yang sama.'
         : response.status === 404
           ? 'Endpoint atau project Pakasir tidak ditemukan. Periksa PAKASIR_PROJECT_SLUG.'
           : response.status === 429
-            ? 'Batas request Pakasir tercapai (2 request per detik). Tunggu beberapa saat sebelum mencoba lagi.'
-            : `Pakasir menolak pembuatan pembayaran (HTTP ${response.status}). Periksa pengaturan project dan metode pembayaran.`;
-      return NextResponse.json({ success: false, error: message, code: gatewayCode, orderId },
+            ? 'Batas request Pakasir tercapai. Tunggu beberapa saat sebelum mencoba lagi.'
+            : response.status >= 500
+              ? `Pakasir mengalami error saat membuat pembayaran (HTTP ${response.status}).`
+              : `Pakasir menolak permintaan pembayaran (HTTP ${response.status}).`;
+      const detail = gatewayMessage
+        ? ` Pesan Pakasir: ${gatewayMessage}`
+        : ' Pakasir tidak memberikan pesan error yang dapat ditampilkan.';
+      const caution = response.status >= 500
+        ? ' Pesanan mungkin sudah dibuat di gateway. Periksa dashboard Pakasir menggunakan nomor pesanan sebelum membuat transaksi baru.' : '';
+      return NextResponse.json({ success: false, error: message + detail + caution,
+        code: gatewayCode, orderId, gatewayStatus: response.status,
+        needsReview: response.status >= 500 },
         { status: response.status === 429 ? 429 : 502, headers: { 'Cache-Control': 'no-store' } });
     }
     stage = 'pakasir_response';
-    const data: unknown = await response.json();
+    if (data === null) throw new CheckoutError('PAKASIR_INVALID_RESPONSE', 'Pakasir mengembalikan respons sukses yang bukan JSON transaksi.');
     if (!object(data) || !text(data.txn_id)) throw new CheckoutError('PAKASIR_MISSING_TXN_ID', 'Respons Pakasir v2 tidak menyediakan txn_id.');
     const txnId = text(data.txn_id);
     knownTxnId = txnId;
